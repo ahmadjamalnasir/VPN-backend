@@ -1,34 +1,30 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Literal
 from datetime import datetime
 
 
+PlanType = Literal["monthly", "yearly", "free"]
+SubscriptionStatus = Literal["active", "past_due", "canceled"]
+
+
 class SubscriptionBase(BaseModel):
-    plan_name: str
-    price: int
-    duration_months: int
-    max_devices: int
-    features: Optional[str] = None
+    plan_type: PlanType
+    status: SubscriptionStatus
+    start_date: datetime
+    end_date: datetime
 
 
 class SubscriptionCreate(SubscriptionBase):
-    user_id: int
+    user_id: str  # UUID
 
 
 class SubscriptionUpdate(BaseModel):
-    plan_name: Optional[str] = None
-    price: Optional[int] = None
-    duration_months: Optional[int] = None
-    max_devices: Optional[int] = None
-    features: Optional[str] = None
-    expires_at: Optional[datetime] = None
+    status: SubscriptionStatus
+    end_date: datetime
 
 
 class SubscriptionResponse(SubscriptionBase):
-    id: int
-    created_at: datetime
-    expires_at: Optional[datetime] = None
-    user_id: int
+    id: str  # UUID
 
     class Config:
         from_attributes = True

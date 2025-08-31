@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routers import auth, users, vpn, payments
+from app.api.v1.routes import users, subscriptions, vpn
 from app.database import Base, engine
 
 # Create database tables
@@ -24,10 +24,9 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(users.router, prefix="/users", tags=["users"])
+app.include_router(subscriptions.router, prefix="/subscriptions", tags=["subscriptions"])
 app.include_router(vpn.router, prefix="/vpn", tags=["vpn"])
-app.include_router(payments.router, prefix="/payments", tags=["payments"])
 
 @app.get("/")
 async def root():

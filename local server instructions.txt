@@ -10,3 +10,94 @@ Great! The server is now running successfully. You can access:
 
 API Documentation: http://localhost:8000/docs
 Alternative API Documentation: http://localhost:8000/redoc
+
+
+Tables schema
+(venv) ahmad.nasir@DXBALMDD-MB147 VPN-backend % psql primevpn -c "\d"
+               List of relations
+ Schema |      Name       | Type  |    Owner    
+--------+-----------------+-------+-------------
+ public | alembic_version | table | ahmad.nasir
+ public | connections     | table | ahmad.nasir
+ public | subscriptions   | table | ahmad.nasir
+ public | users           | table | ahmad.nasir
+ public | vpn_servers     | table | ahmad.nasir
+(5 rows)
+
+(venv) ahmad.nasir@DXBALMDD-MB147 VPN-backend % psql primevpn -c "\d users" -c "\d subscriptions" -
+c "\d vpn_servers" -c "\d connections"
+                              Table "public.users"
+     Column      |            Type             | Collation | Nullable | Default 
+-----------------+-----------------------------+-----------+----------+---------
+ id              | uuid                        |           | not null | 
+ email           | character varying           |           | not null | 
+ hashed_password | character varying           |           | not null | 
+ is_active       | boolean                     |           | not null | true
+ is_superuser    | boolean                     |           | not null | false
+ created_at      | timestamp without time zone |           |          | now()
+ updated_at      | timestamp without time zone |           |          | now()
+Indexes:
+    "users_pkey" PRIMARY KEY, btree (id)
+    "ix_users_email" UNIQUE, btree (email)
+Referenced by:
+    TABLE "connections" CONSTRAINT "connections_user_id_fkey" FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    TABLE "subscriptions" CONSTRAINT "subscriptions_user_id_fkey" FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+
+                       Table "public.subscriptions"
+   Column   |            Type             | Collation | Nullable | Default 
+------------+-----------------------------+-----------+----------+---------
+ id         | uuid                        |           | not null | 
+ user_id    | uuid                        |           | not null | 
+ plan_type  | character varying(10)       |           | not null | 
+ status     | character varying(10)       |           | not null | 
+ start_date | timestamp without time zone |           | not null | 
+ end_date   | timestamp without time zone |           | not null | 
+ created_at | timestamp without time zone |           |          | now()
+ updated_at | timestamp without time zone |           |          | now()
+Indexes:
+    "subscriptions_pkey" PRIMARY KEY, btree (id)
+    "ix_subscriptions_user_id" UNIQUE, btree (user_id)
+Check constraints:
+    "valid_plan_type" CHECK (plan_type::text = ANY (ARRAY['monthly'::character varying, 'yearly'::character varying, 'free'::character varying]::text[]))
+    "valid_status" CHECK (status::text = ANY (ARRAY['active'::character varying, 'past_due'::character varying, 'canceled'::character varying]::text[]))
+Foreign-key constraints:
+    "subscriptions_user_id_fkey" FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+
+                                    Table "public.vpn_servers"
+    Column     |            Type             | Collation | Nullable |           Default           
+---------------+-----------------------------+-----------+----------+-----------------------------
+ id            | uuid                        |           | not null | 
+ hostname      | character varying           |           | not null | 
+ location      | character varying           |           | not null | 
+ ip_address    | character varying           |           | not null | 
+ endpoint      | character varying           |           | not null | 
+ public_key    | character varying           |           | not null | 
+ status        | character varying           |           | not null | 'active'::character varying
+ current_load  | double precision            |           | not null | '0'::double precision
+ ping          | integer                     |           | not null | 0
+ available_ips | character varying           |           | not null | 
+ created_at    | timestamp without time zone |           |          | now()
+ updated_at    | timestamp without time zone |           |          | now()
+Indexes:
+    "vpn_servers_pkey" PRIMARY KEY, btree (id)
+    "ix_vpn_servers_location" btree (location)
+Check constraints:
+    "valid_server_status" CHECK (status::text = ANY (ARRAY['active'::character varying, 'maintenance'::character varying, 'offline'::character varying]::text[]))
+Referenced by:
+    TABLE "connections" CONSTRAINT "connections_server_id_fkey" FOREIGN KEY (server_id) REFERENCES vpn_servers(id) ON DELETE SET NULL
+
+                                       Table "public.connections"
+      Column       |            Type             | Collation | Nullable |            Default             
+-------------------+-----------------------------+-----------+----------+--------------------------------
+ id                | uuid                        |           | not null | 
+ user_id           | uuid                        |           | not null | 
+ server_id         | uuid                        |           |          | 
+ client_ip         | character varying           |           | not null | 
+ client_public_key | character varying           |           | not null | 
+ status            | character varying           |           | not null | 'connected'::character varying
+ bytes_sent        | bigint                      |           | not null | '0'::bigint
+ bytes_received    | bigint                      |           | not null | '0'::bigint
+ started_at        | timestamp without time zone |           | not null | now()
+ ended_at          | timestamp without time zone |           |          | 
+ created_at        | timestamp without time zone |           |          | now()
+ updated_at        | timestamp without time zone |           |          | now()

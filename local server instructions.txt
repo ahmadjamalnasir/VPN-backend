@@ -1,3 +1,12 @@
 To start FastAPI local server 
 
+
+Terminal Command
 source venv/bin/activate && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+
+Output url to test local api documentation
+Great! The server is now running successfully. You can access:
+
+API Documentation: http://localhost:8000/docs
+Alternative API Documentation: http://localhost:8000/redoc

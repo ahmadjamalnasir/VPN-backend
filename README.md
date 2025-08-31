@@ -1,5 +1,20 @@
 # Prime VPN Backend
 
+A robust and secure backend service for managing VPN connections, user subscriptions, and real-time metrics with Stripe integration.
+
+## 🚀 Features
+
+- 🔐 Secure User Authentication & Authorization
+- 🌐 VPN Server Management & Load Balancing
+- 💳 Subscription Plans & Stripe Integration
+- 📊 Real-time Connection Metrics via WebSocket
+- 🔄 Smart Server Selection Algorithm
+- 🔒 WireGuard VPN Integration
+- 📈 Connection Analytics & Usage Tracking
+- 💰 Premium & Free Tier Support
+- 🔄 Automatic Subscription Management
+- 📱 Cross-Platform Supportackend
+
 A robust and secure backend service for managing VPN connections, user subscriptions, and real-time metrics.
 
 ## 🚀 Features
@@ -19,22 +34,32 @@ A robust and secure backend service for managing VPN connections, user subscript
 - Uvicorn ASGI Server
 - WebSocket Support for Real-time Metrics
 - WireGuard VPN Protocol
+- Stripe Integration for Payments
 
 ### Database
 - PostgreSQL 14
-- SQLAlchemy ORM
+- SQLAlchemy ORM with Async Support
 - Alembic for Database Migrations
+- Connection Tracking & Analytics
 
 ### Authentication & Security
 - JWT (JSON Web Tokens)
 - WebSocket Authentication
 - Rate Limiting
 - Secure VPN Key Management
+- Payment Data Encryption
 
 ### Caching & Performance
 - Redis for Session Management
 - Connection Pooling
 - Real-time Metrics Aggregation
+- Server Load Balancing
+
+### Testing
+- Pytest with Async Support
+- In-memory SQLite for Testing
+- 100% Test Coverage Target
+- End-to-End Integration Tests
 
 ## 📁 Project Structure
 
@@ -98,6 +123,207 @@ Response:
 
 ### VPN Connection Management
 ```http
+# Connect to VPN Server
+POST /vpn/connect
+Request:
+{
+  "server_id": "<uuid>",
+  "client_public_key": "<wireguard_public_key>"
+}
+Response:
+{
+  "status": "active",
+  "server_endpoint": "vpn1.example.com:51820",
+  "server_public_key": "<server_public_key>",
+  "assigned_ip": "10.0.0.2",
+  "dns": ["1.1.1.1", "1.0.0.1"]
+}
+
+# Disconnect from VPN
+POST /vpn/disconnect
+Request:
+{
+  "bytes_sent": 1024,
+  "bytes_received": 2048
+}
+Response:
+{
+  "status": "ended",
+  "total_bytes": 3072,
+  "duration": 3600,
+  "summary": {
+    "avg_speed": "1.2 MB/s",
+    "peak_speed": "2.5 MB/s"
+  }
+}
+
+# Real-time Metrics WebSocket
+WS /ws/connection/{user_id}
+Messages:
+{
+  "type": "metrics",
+  "data": {
+    "bytes_sent": 1024,
+    "bytes_received": 2048,
+    "current_speed": "1.2 MB/s",
+    "latency": 50
+  }
+}
+```
+
+### Payment & Subscription
+```http
+# Create Payment Session
+POST /payments/create
+Request:
+{
+  "plan_type": "monthly",
+  "currency": "usd",
+  "success_url": "https://example.com/success",
+  "cancel_url": "https://example.com/cancel"
+}
+Response:
+{
+  "checkout_url": "https://checkout.stripe.com/...",
+  "client_secret": "<stripe_client_secret>",
+  "payment_intent_id": "<stripe_payment_intent_id>"
+}
+
+# Stripe Webhook
+POST /payments/webhook
+Header: stripe-signature: <signature>
+Response: 200 OK
+```
+
+## 🧪 Testing
+
+### Setup
+```bash
+# Install test dependencies
+pip install -r tests/requirements-test.txt
+
+# Run tests with coverage
+pytest --cov=app tests/
+
+# Run specific test file
+pytest tests/api/test_auth.py -v
+
+# Run tests with live output
+pytest -s tests/
+```
+
+### Test Coverage Areas
+- Authentication flows (register, login, refresh, logout)
+- VPN connection management
+- Subscription handling
+- Payment processing
+- WebSocket metrics
+- Database operations
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Python 3.9+
+- PostgreSQL 14
+- Redis
+- WireGuard
+- Stripe Account
+
+### Installation
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/VPN-backend.git
+cd VPN-backend
+
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Install test dependencies
+pip install -r tests/requirements-test.txt
+
+# Setup environment variables
+cp .env.example .env
+# Edit .env with your configuration
+
+# Run database migrations
+alembic upgrade head
+
+# Start the server
+uvicorn app.main:app --reload
+```
+
+### Environment Variables
+```bash
+# Database
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost/dbname
+
+# JWT
+JWT_SECRET_KEY=your-secret-key
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# Stripe
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_MONTHLY_PRICE_ID=price_...
+STRIPE_YEARLY_PRICE_ID=price_...
+
+# VPN
+WIREGUARD_INTERFACE=wg0
+VPN_SUBNET=10.0.0.0/24
+```
+
+## 📚 Documentation
+
+- API Documentation: http://localhost:8000/docs
+- ReDoc Interface: http://localhost:8000/redoc
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
+
+## 🧪 Development
+
+### Creating Database Migrations
+```bash
+# Create a new migration
+alembic revision --autogenerate -m "description"
+
+# Apply migrations
+alembic upgrade head
+
+# Rollback migration
+alembic downgrade -1
+```
+
+### Running Tests
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=app --cov-report=html tests/
+
+# Run specific test file
+pytest tests/api/test_auth.py -v
+```
+
+### Code Quality
+```bash
+# Run linter
+flake8
+
+# Run type checker
+mypy app/
+
+# Format code
+black app/
+```
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 # Establish VPN Connection
 POST /vpn/connect
 Query Parameters:

@@ -1,23 +1,24 @@
 # Prime VPN Backend
 
-A robust and secure backend service for managing VPN connections, user subscriptions, and payments.
+A robust and secure backend service for managing VPN connections, user subscriptions, and real-time metrics.
 
 ## 🚀 Features
 
 - 🔐 Secure User Authentication & Authorization
-- 🌐 VPN Server Management
+- 🌐 VPN Server Management & Load Balancing
 - 💳 Subscription Plans & Billing
-- 📊 Real-time Server Metrics
-- 🔄 Automatic Server Selection
-- 💰 Payment Processing Integration
-- 🛡️ Enhanced Security Measures
+- 📊 Real-time Connection Metrics via WebSocket
+- 🔄 Smart Server Selection Algorithm
+- �️ WireGuard VPN Integration
+- � Connection Analytics & Usage Tracking
 
 ## 🛠️ Tech Stack
 
 ### Backend Framework
 - FastAPI (Python 3.9+)
 - Uvicorn ASGI Server
-- WebSocket Support for Real-time Communication
+- WebSocket Support for Real-time Metrics
+- WireGuard VPN Protocol
 
 ### Database
 - PostgreSQL 14
@@ -26,78 +27,253 @@ A robust and secure backend service for managing VPN connections, user subscript
 
 ### Authentication & Security
 - JWT (JSON Web Tokens)
-- Bcrypt for Password Hashing
-- Email Validation
+- WebSocket Authentication
 - Rate Limiting
+- Secure VPN Key Management
 
 ### Caching & Performance
-- Redis for Session Management and Caching
+- Redis for Session Management
 - Connection Pooling
-
-### Payment Processing
-- Stripe Integration
-- PayPal Integration (optional)
-
-### Development Tools
-- Poetry for Dependency Management
-- Black for Code Formatting
-- Flake8 for Linting
-- Pytest for Unit Testing
+- Real-time Metrics Aggregation
 
 ## 📁 Project Structure
 
 ```
 VPN-backend/
-├── alembic/                  # Database migrations
-│   ├── versions/            # Migration versions
-│   └── env.py              # Migration environment
+├── alembic/                    # Database migrations
+│   ├── versions/              # Migration versions
+│   └── env.py                # Migration environment
 ├── app/
-│   ├── main.py             # Application entry point
-│   ├── config.py           # Configuration settings
-│   ├── database.py         # Database connection
-│   ├── models/             # SQLAlchemy models
-│   ├── schemas/            # Pydantic schemas
+│   ├── api/                  # API implementation
+│   │   └── v1/              # API version 1
+│   │       └── routes/      # Route handlers
+│   ├── models/              # SQLAlchemy models
+│   │   ├── user.py         # User model
+│   │   ├── subscription.py # Subscription model
+│   │   ├── vpn_server.py  # VPN server model
+│   │   └── vpn_connection.py # Connection model
+│   ├── schemas/             # Pydantic schemas
 │   ├── services/           # Business logic
-│   └── routers/            # API endpoints
-├── tests/                   # Test suite
-├── .env                     # Environment variables
-├── alembic.ini             # Alembic configuration
-└── requirements.txt         # Project dependencies
+│   │   ├── auth_service.py     # Authentication
+│   │   ├── metrics_service.py  # Real-time metrics
+│   │   └── wireguard_service.py # VPN management
+│   ├── main.py             # Application entry
+│   └── database.py         # Database setup
+└── requirements.txt         # Dependencies
 ```
 
 ## 🚦 API Documentation
 
-All API endpoints are prefixed with `/api/v1` for versioning. Authentication is handled via JWT tokens passed in the `Authorization` header.
-
-### 🔐 Authentication & Authorization
+### User Management
 ```http
-# User Registration and Authentication
-POST /api/v1/auth/register
-POST /api/v1/auth/login
-POST /api/v1/auth/refresh-token
-POST /api/v1/auth/logout
-POST /api/v1/auth/forgot-password
-POST /api/v1/auth/reset-password
-POST /api/v1/auth/verify-email
-
-# Session Management
-GET /api/v1/auth/sessions
-DELETE /api/v1/auth/sessions/{session_id}
-DELETE /api/v1/auth/sessions/all
+# User Profile
+GET /users/me
+Response:
+{
+  "id": "<uuid>",
+  "email": "user@example.com",
+  "is_active": true,
+  "is_superuser": false,
+  "subscription": {
+    "plan_type": "monthly|yearly|free",
+    "status": "active|past_due|canceled",
+    "start_date": "2025-08-31T12:00:00Z",
+    "end_date": "2026-08-31T12:00:00Z"
+  }
+}
 ```
 
-#### Authentication Response Example
-```json
+### Subscription Management
+```http
+# Subscription Status
+GET /subscriptions/status
+Response:
 {
-    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-    "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-    "token_type": "bearer",
-    "expires_in": 1800,
-    "user": {
-        "id": "uuid",
-        "email": "user@example.com",
-        "is_verified": true,
-        "subscription_status": "active",
+  "plan_type": "monthly|yearly|free",
+  "status": "active|past_due|canceled",
+  "start_date": "2025-08-31T12:00:00Z",
+  "end_date": "2026-08-31T12:00:00Z"
+}
+```
+
+### VPN Connection Management
+```http
+# Establish VPN Connection
+POST /vpn/connect
+Query Parameters:
+  - location (optional): Preferred server location
+
+Response:
+{
+  "connection_id": "<uuid>",
+  "server": {
+    "id": "<uuid>",
+    "hostname": "vpn-server-1",
+    "ip_address": "1.2.3.4",
+    "location": "us-west",
+    "endpoint": "1.2.3.4:51820"
+  },
+  "wg_config": "[Interface]\nPrivateKey=...\nAddress=10.0.0.2/32\n...",
+  "started_at": "2025-08-31T12:00:00Z",
+  "expires_at": null
+}
+
+# Disconnect VPN
+POST /vpn/disconnect/{connection_id}
+Response:
+{
+  "connection_id": "<uuid>",
+  "started_at": "2025-08-31T12:00:00Z",
+  "ended_at": "2025-08-31T13:00:00Z",
+  "duration_seconds": 3600,
+  "bytes_sent": 1000000,
+  "bytes_received": 2000000,
+  "total_bytes": 3000000
+}
+```
+
+### Real-time Metrics
+```http
+# WebSocket Connection
+WS /ws/connection/{user_id}?token={jwt_token}
+
+# Metrics Stream (JSON messages)
+{
+  "timestamp": "2025-08-31T12:00:00Z",
+  "connection_id": "<uuid>",
+  "bytes_sent": 1000000,
+  "bytes_received": 2000000,
+  "upload_speed_mbps": 5.67,
+  "download_speed_mbps": 12.34,
+  "ping_ms": 45,
+  "server_load_pct": 35.5
+}
+```
+
+## 💾 Database Schema
+
+### Users Table
+```sql
+CREATE TABLE users (
+    id UUID PRIMARY KEY,
+    email VARCHAR UNIQUE NOT NULL,
+    hashed_password VARCHAR NOT NULL,
+    is_active BOOLEAN DEFAULT true,
+    is_superuser BOOLEAN DEFAULT false,
+    created_at TIMESTAMP DEFAULT now(),
+    updated_at TIMESTAMP DEFAULT now()
+);
+```
+
+### Subscriptions Table
+```sql
+CREATE TABLE subscriptions (
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    plan_type VARCHAR(10) CHECK (plan_type IN ('monthly', 'yearly', 'free')),
+    status VARCHAR(10) CHECK (status IN ('active', 'past_due', 'canceled')),
+    start_date TIMESTAMP NOT NULL,
+    end_date TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT now(),
+    updated_at TIMESTAMP DEFAULT now()
+);
+```
+
+### VPN Servers Table
+```sql
+CREATE TABLE vpn_servers (
+    id UUID PRIMARY KEY,
+    hostname VARCHAR NOT NULL,
+    location VARCHAR NOT NULL,
+    ip_address VARCHAR NOT NULL,
+    endpoint VARCHAR NOT NULL,
+    public_key VARCHAR NOT NULL,
+    status VARCHAR DEFAULT 'active',
+    current_load FLOAT DEFAULT 0.0,
+    ping INTEGER DEFAULT 0,
+    available_ips VARCHAR NOT NULL,
+    created_at TIMESTAMP DEFAULT now(),
+    updated_at TIMESTAMP DEFAULT now(),
+    CONSTRAINT valid_server_status CHECK (status IN ('active', 'maintenance', 'offline'))
+);
+```
+
+### VPN Connections Table
+```sql
+CREATE TABLE connections (
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    server_id UUID REFERENCES vpn_servers(id) ON DELETE SET NULL,
+    client_ip VARCHAR NOT NULL,
+    client_public_key VARCHAR NOT NULL,
+    status VARCHAR DEFAULT 'connected',
+    bytes_sent BIGINT DEFAULT 0,
+    bytes_received BIGINT DEFAULT 0,
+    started_at TIMESTAMP DEFAULT now(),
+    ended_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT now(),
+    updated_at TIMESTAMP DEFAULT now(),
+    CONSTRAINT valid_connection_status CHECK (status IN ('connected', 'disconnected'))
+);
+```
+
+## 🔄 Server Selection Algorithm
+
+The VPN server selection process uses the following criteria:
+1. Filter servers by status == "active"
+2. If location is specified, filter by matching location
+3. Sort by:
+   - current_load (ascending)
+   - ping (ascending)
+4. Select the first available server
+
+## 📊 Real-time Metrics System
+
+The WebSocket-based metrics system provides:
+- Real-time connection statistics
+- Network speed calculations
+- Server load monitoring
+- Latency measurements
+- Bandwidth usage tracking
+
+Authentication is required via JWT token and metrics are pushed every second.
+
+## 🛡️ Security Features
+
+- JWT-based authentication for REST APIs
+- Token-based WebSocket authentication
+- WireGuard key pair generation and management
+- Secure configuration distribution
+- Rate limiting on sensitive endpoints
+- Automatic connection cleanup
+- Server load balancing
+
+## 📦 Setup & Installation
+
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Set up PostgreSQL database
+4. Run migrations:
+   ```bash
+   alembic upgrade head
+   ```
+5. Start the server:
+   ```bash
+   uvicorn app.main:app --reload
+   ```
+
+## 🧪 Running Tests
+
+```bash
+pytest
+```
+
+## 📄 License
+
+MIT License
         "subscription_expiry": "2025-12-31T23:59:59Z"
     }
 }

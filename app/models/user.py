@@ -17,5 +17,7 @@ class User(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     
-    # Relationship with subscription
+    # Relationships
+    subscription = relationship("Subscription", back_populates="user", uselist=False)
+    connections = relationship("Connection", back_populates="user")
     subscription = relationship("Subscription", back_populates="user", uselist=False)

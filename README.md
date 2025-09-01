@@ -208,24 +208,45 @@ pytest --cov=app tests/
 # Run specific test file
 pytest tests/api/test_auth.py -v
 
+# Run rate limiting tests
+pytest tests/test_rate_limiting.py -v
+
 # Run tests with live output
 pytest -s tests/
 ```
 
 ### Test Coverage Areas
 - Authentication flows (register, login, refresh, logout)
+- Rate limiting and DDoS protection
 - VPN connection management
 - Subscription handling
 - Payment processing
 - WebSocket metrics
 - Database operations
+- Admin security endpoints
+
+### Load Testing Rate Limits
+```bash
+# Install load testing tool
+pip install locust
+
+# Create simple load test
+echo 'from locust import HttpUser, task
+class RateLimitTest(HttpUser):
+    @task
+    def test_endpoint(self):
+        self.client.get("/health")' > locustfile.py
+
+# Run load test
+locust --host=http://localhost:8000 --users=50 --spawn-rate=10
+```
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 - Python 3.9+
 - PostgreSQL 14
-- Redis
+- Redis (required for rate limiting)
 - WireGuard
 - Stripe Account
 
@@ -252,8 +273,25 @@ cp .env.example .env
 # Run database migrations
 alembic upgrade head
 
+# Setup and test rate limiting
+python scripts/setup_rate_limiting.py
+
 # Start the server
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Rate Limiting Setup Verification
+```bash
+# Test rate limiting is working
+curl -I http://localhost:8000/health
+# Should return X-RateLimit-* headers
+
+# Check rate limiting stats (requires admin auth)
+curl http://localhost:8000/api/v1/admin/rate-limits/stats
+
+# Test rate limit exceeded
+for i in {1..10}; do curl http://localhost:8000/api/v1/auth/login; done
+# Should return 429 after configured limit
 ```
 
 ### Environment Variables
@@ -441,6 +479,73 @@ CREATE TABLE connections (
     updated_at TIMESTAMP DEFAULT now(),
     CONSTRAINT valid_connection_status CHECK (status IN ('connected', 'disconnected'))
 );
+```
+
+## 🚫 Rate Limiting & DDoS Protection
+
+### Overview
+Prime VPN implements a comprehensive multi-layer security system to protect against abuse, DDoS attacks, and ensure fair resource usage.
+
+### Architecture
+```
+Client Request → DDoS Protection → Rate Limiting → Authentication → API Endpoint
+```
+
+### DDoS Protection Layer
+- **Traffic Analysis**: Real-time monitoring of request patterns
+- **IP Reputation**: Automatic blacklisting of malicious IPs
+- **Threshold Detection**: 500+ requests/minute triggers protection
+- **Geographic Filtering**: Optional country-based restrictions
+- **Whitelist Support**: Bypass protection for trusted IPs/networks
+
+### Rate Limiting Layer
+- **Sliding Window**: Precise request counting with Redis
+- **Burst Support**: Allow temporary spikes within limits
+- **Endpoint-Specific**: Different limits for different API endpoints
+- **User-Based**: Per-user limits for authenticated requests
+- **Adaptive**: Dynamic adjustment based on system load
+
+### Admin Management
+```http
+# View rate limiting statistics
+GET /api/v1/admin/rate-limits/stats
+
+# Check specific IP status
+GET /api/v1/admin/rate-limits/status/{ip}?endpoint=auth_login
+
+# Ban/unban IP addresses
+POST /api/v1/admin/bans
+DELETE /api/v1/admin/bans/{ip}
+
+# Reset rate limits
+DELETE /api/v1/admin/rate-limits/reset/{ip}?endpoint=auth_login
+```
+
+### Monitoring & Alerts
+- **Real-time Metrics**: Track violations and bans
+- **Top Offenders**: Identify problematic IPs
+- **Endpoint Analysis**: Monitor which endpoints are most targeted
+- **Performance Impact**: Measure protection overhead
+
+### Configuration
+All settings are configurable via environment variables:
+```env
+# Enable/disable protection
+RATE_LIMIT_ENABLED=true
+DDOS_PROTECTION_ENABLED=true
+
+# Global limits
+GLOBAL_RATE_LIMIT=1000  # requests/minute
+IP_RATE_LIMIT=100       # requests/minute per IP
+
+# DDoS thresholds
+DDOS_THRESHOLD=500      # requests/minute to trigger ban
+DDOS_BAN_DURATION=3600  # ban duration in seconds
+
+# Suspicious activity
+SUSPICIOUS_ACTIVITY_THRESHOLD=50  # failed attempts
+SUSPICIOUS_ACTIVITY_WINDOW=300    # time window (seconds)
+SUSPICIOUS_ACTIVITY_BAN=1800      # ban duration (seconds)
 ```
 
 ## 🔄 Server Selection Algorithm
@@ -821,7 +926,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```env
 # Application
 APP_NAME=Prime VPN
-DEBUG=True
+DEBUG=False
 SECRET_KEY=your-secret-key
 ALLOWED_HOSTS=localhost,127.0.0.1
 
@@ -830,11 +935,25 @@ DATABASE_URL=postgresql://user:password@localhost:5432/primevpn
 
 # Redis
 REDIS_URL=redis://localhost:6379
+REDIS_HOST=localhost
+REDIS_PORT=6379
 
 # JWT
 JWT_SECRET_KEY=your-jwt-secret
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# Rate Limiting & DDoS Protection
+RATE_LIMIT_ENABLED=true
+DDOS_PROTECTION_ENABLED=true
+GLOBAL_RATE_LIMIT=1000
+IP_RATE_LIMIT=100
+DDOS_THRESHOLD=500
+DDOS_BAN_DURATION=3600
+DDOS_WHITELIST_IPS=["127.0.0.1","::1"]
+SUSPICIOUS_ACTIVITY_THRESHOLD=50
+SUSPICIOUS_ACTIVITY_WINDOW=300
+SUSPICIOUS_ACTIVITY_BAN=1800
 
 # Stripe
 STRIPE_SECRET_KEY=your-stripe-secret-key
@@ -843,28 +962,41 @@ STRIPE_WEBHOOK_SECRET=your-stripe-webhook-secret
 
 ## 🔄 Process Flow
 
-1. **User Registration & Authentication**
-   - User registers with email and password
+1. **Request Processing & Security**
+   - **DDoS Protection**: First layer checks for malicious traffic patterns
+   - **Rate Limiting**: Second layer applies endpoint-specific limits
+   - **Authentication**: JWT token validation for protected endpoints
+   - **Authorization**: Role-based access control
+
+2. **User Registration & Authentication**
+   - User registers with email and password (rate limited: 3/hour)
    - System validates email and hashes password
+   - Login attempts rate limited (5/5min) with suspicious activity detection
    - JWT tokens issued upon successful login
 
-2. **Subscription Management**
+3. **Subscription Management**
    - User browses available subscription plans
-   - Selects plan and proceeds to payment
+   - Selects plan and proceeds to payment (rate limited: 10/5min)
    - System creates payment intent with Stripe
    - Upon successful payment, subscription activated
 
-3. **VPN Connection**
-   - User requests VPN connection
+4. **VPN Connection**
+   - User requests VPN connection (rate limited: 20/min)
    - System selects optimal server based on load and location
    - Connection details returned to client
    - Real-time monitoring of connection status
 
-4. **Server Management**
+5. **Server Management**
    - Continuous monitoring of server health
    - Automatic load balancing
    - Server metrics collection and analysis
    - Automatic failover in case of server issues
+
+6. **Security Monitoring**
+   - Real-time tracking of rate limit violations
+   - Automatic IP banning for DDoS attempts
+   - Admin dashboard for security metrics
+   - Suspicious activity alerts and logging
 
 ## 🧪 Testing
 
@@ -878,13 +1010,44 @@ pytest --cov=app tests/
 
 ## 🔒 Security Features
 
+### Authentication & Authorization
 - Password hashing with bcrypt
-- JWT-based authentication
-- Rate limiting on sensitive endpoints
+- JWT-based authentication with refresh tokens
+- Role-based access control (RBAC)
+- Session management with Redis
+
+### Rate Limiting & DDoS Protection
+- **Multi-layer Rate Limiting**: Endpoint-specific limits with burst support
+- **DDoS Protection**: Automatic IP banning for suspicious traffic patterns
+- **Adaptive Throttling**: Dynamic rate adjustment based on system load
+- **IP Whitelisting**: Bypass protection for trusted IPs
+- **Suspicious Activity Detection**: Automatic banning for repeated failed attempts
+
+#### Rate Limiting Configuration
+```yaml
+Endpoint Limits (requests/window):
+- Authentication Login: 5 req/5min (burst: 2)
+- Registration: 3 req/hour (burst: 1)
+- Password Reset: 3 req/hour (burst: 1)
+- VPN Connect: 20 req/min (burst: 5)
+- VPN Disconnect: 30 req/min (burst: 10)
+- Payments: 10 req/5min (burst: 3)
+- WebSocket: 5 connections/min (burst: 2)
+- General API: 60 req/min (burst: 20)
+```
+
+#### DDoS Protection Thresholds
+- **Detection Threshold**: 500 requests/minute
+- **Auto-ban Duration**: 1 hour
+- **Suspicious Activity**: 50 failed attempts in 5 minutes → 30 min ban
+- **Global IP Limit**: 100 requests/minute
+
+### Additional Security
 - Input validation with Pydantic
 - SQL injection prevention with SQLAlchemy
-- CORS protection
+- CORS protection with configurable origins
 - HTTP Security Headers
+- Request/Response logging for audit trails
 
 ## 🤝 Contributing
 

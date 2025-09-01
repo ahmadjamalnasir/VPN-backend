@@ -1,17 +1,19 @@
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas.user import UserCreate, UserResponse
 from app.services import auth_service
+from app.utils.rate_limit_decorators import rate_limit, strict_rate_limit
 
 router = APIRouter()
 
 
 @router.post("/register", response_model=UserResponse)
-async def register(user: UserCreate, db: Session = Depends(get_db)):
+@rate_limit("auth_register")
+async def register(request: Request, user: UserCreate, db: Session = Depends(get_db)):
     db_user = auth_service.get_user_by_email(db, user.email)
     if db_user:
         raise HTTPException(
@@ -22,7 +24,9 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/token")
+@rate_limit("auth_login")
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
@@ -47,7 +51,9 @@ async def login(
 
 
 @router.post("/refresh")
+@rate_limit("auth_refresh")
 async def refresh_token(
+    request: Request,
     current_user = Depends(auth_service.get_current_user)
 ):
     access_token_expires = timedelta(minutes=auth_service.ACCESS_TOKEN_EXPIRE_MINUTES)

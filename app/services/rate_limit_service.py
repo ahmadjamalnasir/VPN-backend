@@ -118,14 +118,19 @@ class RateLimitService:
             "duration": duration
         }
         await self.redis.setex(ban_key, duration, json.dumps(ban_data))
-        logger.info(f"Banned {identifier} for {duration} seconds. Reason: {reason}")
+        from app.utils.security import sanitize_for_logging
+        safe_identifier = sanitize_for_logging(identifier)
+        safe_reason = sanitize_for_logging(reason)
+        logger.info(f"Banned {safe_identifier} for {duration} seconds. Reason: {safe_reason}")
     
     async def unban_identifier(self, identifier: str) -> bool:
         """Remove ban for identifier"""
         ban_key = f"banned:{identifier}"
         result = await self.redis.delete(ban_key)
         if result:
-            logger.info(f"Unbanned {identifier}")
+            from app.utils.security import sanitize_for_logging
+            safe_identifier = sanitize_for_logging(identifier)
+            logger.info(f"Unbanned {safe_identifier}")
         return bool(result)
     
     async def is_banned(self, identifier: str) -> Tuple[bool, Optional[Dict]]:

@@ -6,10 +6,16 @@ from app.schemas.subscription import SubscriptionCreate, SubscriptionUpdate
 
 
 def get_subscription(db: Session, subscription_id: int) -> Optional[Subscription]:
+    # Validate input to prevent injection
+    if not isinstance(subscription_id, int) or subscription_id <= 0:
+        return None
     return db.query(Subscription).filter(Subscription.id == subscription_id).first()
 
 
 def get_user_subscription(db: Session, user_id: int) -> Optional[Subscription]:
+    # Validate input to prevent injection
+    if not isinstance(user_id, int) or user_id <= 0:
+        return None
     return db.query(Subscription).filter(Subscription.user_id == user_id).first()
 
 
@@ -46,6 +52,9 @@ def update_subscription(
 
 
 def delete_subscription(db: Session, subscription_id: int) -> bool:
+    # Validate input to prevent injection
+    if not isinstance(subscription_id, int) or subscription_id <= 0:
+        return False
     subscription = get_subscription(db, subscription_id)
     if subscription:
         db.delete(subscription)

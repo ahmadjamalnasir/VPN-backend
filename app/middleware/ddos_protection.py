@@ -43,7 +43,9 @@ class DDoSProtectionMiddleware(BaseHTTPMiddleware):
         # Check DDoS threshold
         if await self._check_ddos_threshold(client_ip):
             await self._ban_ip(client_ip)
-            logger.warning(f"IP {client_ip} banned for DDoS activity")
+            from app.utils.security import sanitize_for_logging
+            safe_ip = sanitize_for_logging(client_ip)
+            logger.warning(f"IP {safe_ip} banned for DDoS activity")
             return JSONResponse(
                 status_code=429,
                 content={
@@ -60,18 +62,27 @@ class DDoSProtectionMiddleware(BaseHTTPMiddleware):
     
     def _get_client_ip(self, request: Request) -> str:
         """Extract client IP from request headers"""
+        from app.utils.security import validate_ip_address, sanitize_identifier
+        
         # Check X-Forwarded-For header first
         forwarded_for = request.headers.get("X-Forwarded-For")
         if forwarded_for:
-            return forwarded_for.split(",")[0].strip()
+            ip = forwarded_for.split(",")[0].strip()
+            if validate_ip_address(ip):
+                return sanitize_identifier(ip)
         
         # Check X-Real-IP header
         real_ip = request.headers.get("X-Real-IP")
-        if real_ip:
-            return real_ip.strip()
+        if real_ip and validate_ip_address(real_ip.strip()):
+            return sanitize_identifier(real_ip.strip())
         
         # Fall back to direct client IP
-        return request.client.host if request.client else "unknown"
+        if request.client and request.client.host:
+            ip = request.client.host
+            if validate_ip_address(ip):
+                return sanitize_identifier(ip)
+        
+        return "unknown"
     
     def _is_whitelisted(self, ip: str) -> bool:
         """Check if IP is in whitelist"""
@@ -174,10 +185,20 @@ class AdvancedRateLimitMiddleware(BaseHTTPMiddleware):
     
     def _get_client_ip(self, request: Request) -> str:
         """Extract client IP from request headers"""
+        from app.utils.security import validate_ip_address, sanitize_identifier
+        
         forwarded_for = request.headers.get("X-Forwarded-For")
         if forwarded_for:
-            return forwarded_for.split(",")[0].strip()
-        return request.client.host if request.client else "unknown"
+            ip = forwarded_for.split(",")[0].strip()
+            if validate_ip_address(ip):
+                return sanitize_identifier(ip)
+        
+        if request.client and request.client.host:
+            ip = request.client.host
+            if validate_ip_address(ip):
+                return sanitize_identifier(ip)
+        
+        return "unknown"
     
     def _get_endpoint_key(self, path: str, method: str) -> str:
         """Determine rate limit key based on endpoint"""
@@ -278,4 +299,6 @@ class AdvancedRateLimitMiddleware(BaseHTTPMiddleware):
         if attempt_count >= settings.SUSPICIOUS_ACTIVITY_THRESHOLD:
             ban_key = f"suspicious_ban:{client_ip}"
             await self.redis.setex(ban_key, settings.SUSPICIOUS_ACTIVITY_BAN, "banned")
-            logger.warning(f"IP {client_ip} banned for suspicious activity ({attempt_count} failed attempts)")
+            from app.utils.security import sanitize_for_logging
+            safe_ip = sanitize_for_logging(client_ip)
+            logger.warning(f"IP {safe_ip} banned for suspicious activity ({attempt_count} failed attempts)")

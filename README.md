@@ -211,6 +211,9 @@ pytest tests/api/test_auth.py -v
 # Run rate limiting tests
 pytest tests/test_rate_limiting.py -v
 
+# Run security tests
+pytest tests/test_security_fixes.py -v
+
 # Run tests with live output
 pytest -s tests/
 ```
@@ -260,7 +263,7 @@ cd VPN-backend
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# Install dependencies
+# Install dependencies (latest secure versions)
 pip install -r requirements.txt
 
 # Install test dependencies
@@ -275,6 +278,9 @@ alembic upgrade head
 
 # Setup and test rate limiting
 python scripts/setup_rate_limiting.py
+
+# Run security tests
+pytest tests/test_security_fixes.py -v
 
 # Start the server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000

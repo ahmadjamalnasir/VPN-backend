@@ -42,9 +42,19 @@ async def get_rate_limit_status(
     endpoint: str = Query(..., description="Endpoint key (e.g., auth_login, api_general)"),
     current_user = Depends(get_current_admin_user)
 ):
+    from app.utils.security import sanitize_identifier
+    
+    # Validate and sanitize inputs
+    safe_identifier = sanitize_identifier(identifier)
+    safe_endpoint = sanitize_identifier(endpoint)
+    
+    # Validate endpoint is in allowed list
+    allowed_endpoints = list(settings.RATE_LIMITS.keys())
+    if safe_endpoint not in allowed_endpoints:
+        raise HTTPException(status_code=400, detail="Invalid endpoint key")
     """Get rate limit status for specific identifier and endpoint"""
     try:
-        status = await rate_limit_service.get_rate_limit_status(identifier, endpoint)
+        status = await rate_limit_service.get_rate_limit_status(safe_identifier, safe_endpoint)
         return RateLimitStatusResponse(**status)
     except Exception as e:
         logger.error(f"Error getting rate limit status for {identifier}: {e}")
@@ -56,14 +66,28 @@ async def reset_rate_limit(
     endpoint: str = Query(..., description="Endpoint key to reset"),
     current_user = Depends(get_current_admin_user)
 ):
+    from app.utils.security import sanitize_identifier
+    
+    # Validate and sanitize inputs
+    safe_identifier = sanitize_identifier(identifier)
+    safe_endpoint = sanitize_identifier(endpoint)
+    
+    # Validate endpoint is in allowed list
+    allowed_endpoints = list(settings.RATE_LIMITS.keys())
+    if safe_endpoint not in allowed_endpoints:
+        raise HTTPException(status_code=400, detail="Invalid endpoint key")
     """Reset rate limit for specific identifier and endpoint"""
     try:
-        success = await rate_limit_service.reset_rate_limit(identifier, endpoint)
+        success = await rate_limit_service.reset_rate_limit(safe_identifier, safe_endpoint)
         if success:
-            logger.info(f"Rate limit reset for {identifier} on {endpoint} by admin {current_user.email}")
-            return {"message": f"Rate limit reset for {identifier} on {endpoint}", "success": True}
+            from app.utils.security import sanitize_for_logging
+            safe_log_identifier = sanitize_for_logging(safe_identifier)
+            safe_log_endpoint = sanitize_for_logging(safe_endpoint)
+            safe_email = sanitize_for_logging(current_user.email)
+            logger.info(f"Rate limit reset for {safe_log_identifier} on {safe_log_endpoint} by admin {safe_email}")
+            return {"message": f"Rate limit reset for {safe_identifier} on {safe_endpoint}", "success": True}
         else:
-            return {"message": f"No rate limit found for {identifier} on {endpoint}", "success": False}
+            return {"message": f"No rate limit found for {safe_identifier} on {safe_endpoint}", "success": False}
     except Exception as e:
         logger.error(f"Error resetting rate limit for {identifier}: {e}")
         raise HTTPException(status_code=500, detail="Failed to reset rate limit")
@@ -81,7 +105,10 @@ async def ban_identifier(
             reason=f"Admin ban by {current_user.email}: {ban_request.reason}"
         )
         
-        logger.info(f"Identifier {ban_request.identifier} banned by admin {current_user.email}")
+        from app.utils.security import sanitize_for_logging
+        safe_identifier = sanitize_for_logging(ban_request.identifier)
+        safe_email = sanitize_for_logging(current_user.email)
+        logger.info(f"Identifier {safe_identifier} banned by admin {safe_email}")
         return {
             "message": f"Identifier {ban_request.identifier} banned successfully",
             "duration": ban_request.duration,
@@ -100,7 +127,10 @@ async def unban_identifier(
     try:
         success = await rate_limit_service.unban_identifier(identifier)
         if success:
-            logger.info(f"Identifier {identifier} unbanned by admin {current_user.email}")
+            from app.utils.security import sanitize_for_logging
+            safe_identifier = sanitize_for_logging(identifier)
+            safe_email = sanitize_for_logging(current_user.email)
+            logger.info(f"Identifier {safe_identifier} unbanned by admin {safe_email}")
             return {"message": f"Identifier {identifier} unbanned successfully", "success": True}
         else:
             return {"message": f"No ban found for identifier {identifier}", "success": False}
@@ -132,7 +162,9 @@ async def cleanup_expired_entries(
     """Clean up expired rate limit entries"""
     try:
         cleaned_count = await rate_limit_service.cleanup_expired_entries()
-        logger.info(f"Cleaned up {cleaned_count} expired rate limit entries by admin {current_user.email}")
+        from app.utils.security import sanitize_for_logging
+        safe_email = sanitize_for_logging(current_user.email)
+        logger.info(f"Cleaned up {cleaned_count} expired rate limit entries by admin {safe_email}")
         return {
             "message": f"Cleaned up {cleaned_count} expired entries",
             "cleaned_count": cleaned_count

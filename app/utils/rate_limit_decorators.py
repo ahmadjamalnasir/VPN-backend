@@ -76,7 +76,10 @@ def rate_limit(
             )
             
             if is_limited:
-                logger.warning(f"Rate limit exceeded for {identifier} on {endpoint_key}")
+                from app.utils.security import sanitize_for_logging
+                safe_identifier = sanitize_for_logging(identifier)
+                safe_endpoint = sanitize_for_logging(endpoint_key)
+                logger.warning(f"Rate limit exceeded for {safe_identifier} on {safe_endpoint}")
                 raise HTTPException(
                     status_code=429,
                     detail={
@@ -213,18 +216,27 @@ async def _get_user_identifier(request: Request) -> Optional[str]:
 
 def _get_client_ip(request: Request) -> str:
     """Extract client IP from request"""
+    from app.utils.security import validate_ip_address, sanitize_identifier
+    
     # Check X-Forwarded-For header first
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
+        ip = forwarded_for.split(",")[0].strip()
+        if validate_ip_address(ip):
+            return sanitize_identifier(ip)
     
     # Check X-Real-IP header
     real_ip = request.headers.get("X-Real-IP")
-    if real_ip:
-        return real_ip.strip()
+    if real_ip and validate_ip_address(real_ip.strip()):
+        return sanitize_identifier(real_ip.strip())
     
     # Fall back to direct client IP
-    return request.client.host if request.client else "unknown"
+    if request.client and request.client.host:
+        ip = request.client.host
+        if validate_ip_address(ip):
+            return sanitize_identifier(ip)
+    
+    return "unknown"
 
 # Convenience decorators for common endpoints
 def auth_rate_limit(func: Callable) -> Callable:

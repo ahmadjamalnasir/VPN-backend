@@ -41,7 +41,13 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
-    return db.query(User).filter(User.email == email).first()
+    from email_validator import validate_email, EmailNotValidError
+    try:
+        # Validate email format to prevent injection
+        validate_email(email)
+        return db.query(User).filter(User.email == email).first()
+    except EmailNotValidError:
+        return None
 
 
 def create_user(db: Session, user: UserCreate) -> User:

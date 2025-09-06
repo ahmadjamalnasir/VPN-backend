@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from app.database import get_db
+from app.models.user import User
 from app.models.vpn_server import VPNServer
 from app.models.connection import Connection
-from app.models.user import User
-from app.schemas.vpn import VPNServerResponse, VPNConnectRequest, VPNConnectionResponse, VPNDisconnectRequest
+from app.schemas.vpn import VPNServerResponse, VPNConnectRequest, VPNConnectionResponse
 from app.schemas.connection import ConnectionResponse
 from uuid import UUID
 from datetime import datetime
@@ -17,34 +17,25 @@ router = APIRouter()
 @router.get("/servers", response_model=List[VPNServerResponse])
 async def get_vpn_servers(
     location: Optional[str] = Query(None, description="Filter by location"),
-    status: str = Query("active", description="Server status filter"),
+    is_premium: Optional[bool] = Query(None, description="Filter premium servers"),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get VPN servers with filters"""
-    query = select(VPNServer).where(VPNServer.status == status)
+    query = select(VPNServer).where(VPNServer.status == "active")
     if location:
         query = query.where(VPNServer.location == location)
+    if is_premium is not None:
+        query = query.where(VPNServer.is_premium == is_premium)
     
     result = await db.execute(query.order_by(VPNServer.current_load, VPNServer.ping))
     servers = result.scalars().all()
     return servers
 
-@router.get("/servers/{server_id}", response_model=VPNServerResponse)
-async def get_vpn_server(server_id: UUID, db: AsyncSession = Depends(get_db)):
-    """Get specific VPN server"""
-    result = await db.execute(select(VPNServer).where(VPNServer.id == server_id))
-    server = result.scalar_one_or_none()
-    if not server:
-        raise HTTPException(status_code=404, detail="Server not found")
-    return server
-
 @router.post("/connect", response_model=VPNConnectionResponse)
 async def connect_vpn(
     request: VPNConnectRequest,
-    user_email: str = Query(..., description="User email for connection"),
+    user_email: str = Query(..., description="User email"),
     db: AsyncSession = Depends(get_db)
 ):
-    """Connect user to VPN server"""
     # Find user
     user_result = await db.execute(select(User).where(User.email == user_email))
     user = user_result.scalar_one_or_none()
@@ -63,15 +54,27 @@ async def connect_vpn(
     # Find server
     if request.server_id:
         server_result = await db.execute(select(VPNServer).where(VPNServer.id == request.server_id))
+        server = server_result.scalar_one_or_none()
+        if not server:
+            raise HTTPException(status_code=404, detail="Server not found")
     else:
+        # Auto-select server based on user premium status
         query = select(VPNServer).where(VPNServer.status == "active")
         if request.location:
             query = query.where(VPNServer.location == request.location)
+        
+        # Premium users can access premium servers, free users only free servers
+        if not user.is_premium:
+            query = query.where(VPNServer.is_premium == False)
+        
         server_result = await db.execute(query.order_by(VPNServer.current_load).limit(1))
+        server = server_result.scalar_one_or_none()
+        if not server:
+            raise HTTPException(status_code=404, detail="No available servers for your subscription")
     
-    server = server_result.scalar_one_or_none()
-    if not server:
-        raise HTTPException(status_code=404, detail="No available servers")
+    # Validate premium server access
+    if server.is_premium and not user.is_premium:
+        raise HTTPException(status_code=403, detail="Premium subscription required for this server")
     
     # Generate client IP
     client_ip = f"10.0.{secrets.randbelow(255)}.{secrets.randbelow(254) + 1}"
@@ -114,13 +117,12 @@ AllowedIPs = 0.0.0.0/0"""
 
 @router.post("/disconnect", response_model=ConnectionResponse)
 async def disconnect_vpn(
-    connection_id: UUID = Query(..., description="Connection ID to disconnect"),
+    connection_id: UUID = Query(..., description="Connection ID"),
     user_email: str = Query(..., description="User email"),
-    bytes_sent: int = Query(0, description="Bytes sent during session"),
-    bytes_received: int = Query(0, description="Bytes received during session"),
+    bytes_sent: int = Query(0, description="Bytes sent"),
+    bytes_received: int = Query(0, description="Bytes received"),
     db: AsyncSession = Depends(get_db)
 ):
-    """Disconnect VPN connection"""
     # Find user
     user_result = await db.execute(select(User).where(User.email == user_email))
     user = user_result.scalar_one_or_none()
@@ -141,11 +143,16 @@ async def disconnect_vpn(
     if not connection:
         raise HTTPException(status_code=404, detail="Active connection not found")
     
+    # Calculate duration
+    ended_at = datetime.utcnow()
+    duration = int((ended_at - connection.started_at).total_seconds())
+    
     # Update connection
     connection.status = "disconnected"
-    connection.ended_at = datetime.utcnow()
+    connection.ended_at = ended_at
     connection.bytes_sent = bytes_sent
     connection.bytes_received = bytes_received
+    connection.duration_seconds = duration
     
     # Update server load
     if connection.server:
@@ -154,25 +161,3 @@ async def disconnect_vpn(
     await db.commit()
     await db.refresh(connection)
     return connection
-
-@router.get("/connections", response_model=List[ConnectionResponse])
-async def get_user_connections(
-    user_email: str = Query(..., description="User email to get connections"),
-    status: Optional[str] = Query(None, description="Filter by connection status"),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get user connection history"""
-    # Find user
-    user_result = await db.execute(select(User).where(User.email == user_email))
-    user = user_result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Get connections
-    query = select(Connection).where(Connection.user_id == user.id)
-    if status:
-        query = query.where(Connection.status == status)
-    
-    result = await db.execute(query.order_by(Connection.created_at.desc()))
-    connections = result.scalars().all()
-    return connections

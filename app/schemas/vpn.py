@@ -12,6 +12,7 @@ class VPNServerResponse(BaseModel):
     status: str
     current_load: float
     ping: int
+    is_premium: bool
     
     class Config:
         from_attributes = True
@@ -32,3 +33,8 @@ class VPNConnectionResponse(BaseModel):
 class VPNDisconnectRequest(BaseModel):
     bytes_sent: int = 0
     bytes_received: int = 0
+
+class VPNDisconnectResponse(BaseModel):
+    connection_id: UUID
+    session_stats: dict
+    message: str

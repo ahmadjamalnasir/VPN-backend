@@ -16,6 +16,15 @@ class SubscriptionPlanResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class SubscriptionResponse(SubscriptionPlanResponse):
+    pass
+
+class SubscriptionCreate(BaseModel):
+    plan_type: str
+    status: str
+    start_date: datetime
+    end_date: datetime
+
 class UserSubscriptionResponse(BaseModel):
     id: UUID
     user_id: UUID

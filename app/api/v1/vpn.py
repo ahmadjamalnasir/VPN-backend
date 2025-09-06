@@ -5,7 +5,7 @@ from app.database import get_db
 from app.models.user import User
 from app.models.vpn_server import VPNServer
 from app.models.connection import Connection
-from app.schemas.vpn import VPNServerResponse, VPNConnectRequest, VPNConnectionResponse
+from app.schemas.vpn import VPNServerResponse, VPNConnectRequest, VPNConnectionResponse, VPNDisconnectResponse
 from app.schemas.connection import ConnectionResponse
 from uuid import UUID
 from datetime import datetime
@@ -115,7 +115,7 @@ AllowedIPs = 0.0.0.0/0"""
         status=connection.status
     )
 
-@router.post("/disconnect", response_model=ConnectionResponse)
+@router.post("/disconnect", response_model=VPNDisconnectResponse)
 async def disconnect_vpn(
     connection_id: UUID = Query(..., description="Connection ID"),
     user_email: str = Query(..., description="User email"),
@@ -143,9 +143,21 @@ async def disconnect_vpn(
     if not connection:
         raise HTTPException(status_code=404, detail="Active connection not found")
     
-    # Calculate duration
+    # Calculate duration and stats
     ended_at = datetime.utcnow()
     duration = int((ended_at - connection.started_at).total_seconds())
+    total_bytes = bytes_sent + bytes_received
+    
+    # Calculate speeds
+    avg_speed_mbps = 0.0
+    if duration > 0:
+        avg_speed_mbps = round((total_bytes / (1024 * 1024)) / duration, 2)
+    
+    # Format duration
+    hours = duration // 3600
+    minutes = (duration % 3600) // 60
+    seconds = duration % 60
+    duration_formatted = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
     
     # Update connection
     connection.status = "disconnected"
@@ -159,5 +171,22 @@ async def disconnect_vpn(
         connection.server.current_load = max(0.0, connection.server.current_load - 0.1)
     
     await db.commit()
-    await db.refresh(connection)
-    return connection
+    
+    # Prepare session stats
+    session_stats = {
+        "duration_seconds": duration,
+        "duration_formatted": duration_formatted,
+        "bytes_sent": bytes_sent,
+        "bytes_received": bytes_received,
+        "total_bytes": total_bytes,
+        "total_data_mb": round(total_bytes / (1024 * 1024), 2),
+        "avg_speed_mbps": avg_speed_mbps,
+        "server_location": connection.server.location if connection.server else "Unknown",
+        "client_ip": connection.client_ip
+    }
+    
+    return VPNDisconnectResponse(
+        connection_id=connection.id,
+        session_stats=session_stats,
+        message="VPN disconnected successfully. Session stats recorded."
+    )

@@ -10,6 +10,9 @@ class UserSignupRequest(BaseModel):
     phone: Optional[str] = None
     country: Optional[str] = None
 
+class UserCreate(UserSignupRequest):
+    pass
+
 class UserUpdateRequest(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None

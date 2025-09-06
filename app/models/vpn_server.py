@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Integer, Float, CheckConstraint
+from sqlalchemy import Column, String, DateTime, Integer, Float, Boolean, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -18,6 +18,7 @@ class VPNServer(Base):
     current_load = Column(Float, nullable=False, default=0.0)
     ping = Column(Integer, nullable=False, default=0)
     available_ips = Column(String, nullable=False)
+    is_premium = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     

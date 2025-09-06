@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, BigInteger
+from sqlalchemy import Column, String, DateTime, ForeignKey, BigInteger, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -16,6 +16,7 @@ class Connection(Base):
     status = Column(String, nullable=False, default="connected")
     bytes_sent = Column(BigInteger, nullable=False, default=0)
     bytes_received = Column(BigInteger, nullable=False, default=0)
+    duration_seconds = Column(Integer, nullable=False, default=0)
     started_at = Column(DateTime, nullable=False, server_default=func.now())
     ended_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now())

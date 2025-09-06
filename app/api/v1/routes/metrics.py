@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.services.auth_service import get_current_user_from_token
+from app.services.auth_service import get_current_user
 from app.models.user import User
 from app.models.vpn_connection import VPNConnection
 from app.services.metrics_service import manager
@@ -19,7 +19,7 @@ async def get_websocket_user(
     if not token:
         raise HTTPException(status_code=401, detail="Missing authentication token")
     
-    user = await get_current_user_from_token(token, db)
+    user = await get_current_user(token, db)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid authentication token")
     

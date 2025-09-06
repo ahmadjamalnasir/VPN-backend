@@ -1,165 +1,78 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.config import settings
-from app.api.v1.routes import users, subscriptions, vpn, metrics, admin
-from app.database import Base, engine
-from app.middleware.ddos_protection import DDoSProtectionMiddleware, AdvancedRateLimitMiddleware
-from app.middleware.rate_limit import RateLimitMiddleware
+from app.core.config import get_settings
+from app.database import engine
+from app.api.v1 import auth, users, subscriptions, vpn
 from datetime import datetime
-import asyncio
-from fastapi import HTTPException
-from sqlalchemy import text
-import redis.asyncio as redis
 import logging
-import sys
+from sqlalchemy import text
 
-# Configure detailed logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    stream=sys.stdout
-)
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
-async def check_database_connection():
-    """Check if database is accessible"""
+async def check_database():
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
-            logger.info("Database connection successful")
-            return True
-    except Exception as e:
-        logger.error(f"Database connection failed: {e}")
-        return False
-
-async def check_redis_connection():
-    """Check if Redis is accessible"""
-    try:
-        redis_client = redis.from_url(settings.REDIS_URL)
-        await redis_client.ping()
-        await redis_client.close()
-        logger.info("Redis connection successful")
+        logger.info("✅ Database connected")
         return True
     except Exception as e:
-        logger.error(f"Redis connection failed: {e}")
+        logger.error(f"❌ Database error: {e}")
         return False
 
-# Initialize FastAPI app with debug mode for development
 app = FastAPI(
     title="Prime VPN API",
-    description="Backend API for Prime VPN service with advanced DDoS protection",
+    description="Professional VPN Backend API with logical request/response patterns",
     version="1.0.2",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    debug=True  # Enable debug mode for better error messages
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
 @app.on_event("startup")
-async def startup_event():
-    """
-    Verify all required services are available on startup
-    """
-    logger.info("Starting up Prime VPN API server...")
-    
-    # Check database
-    if not await check_database_connection():
-        logger.error("Database connection failed - shutting down")
-        sys.exit(1)
-        
-    # Check Redis only if rate limiting is enabled
-    if settings.RATE_LIMITING_ENABLED:
-        if not await check_redis_connection():
-            logger.warning("Redis connection failed - rate limiting will be disabled")
-            app.state.rate_limiting_enabled = False
-        else:
-            app.state.rate_limiting_enabled = True
-            logger.info("Rate limiting enabled")
-    
-    logger.info("All startup checks completed successfully")
+async def startup():
+    logger.info("🚀 Starting Prime VPN API server...")
+    await check_database()
 
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """
-    Clean up connections on shutdown
-    """
-    logger.info("Shutting down Prime VPN API server...")
-    # Close any remaining connections
-    await engine.dispose()
-    logger.info("All connections closed")
-
-# Add rate limiting middleware (with lazy Redis connection)
-app.add_middleware(
-    RateLimitMiddleware,
-    redis_url=settings.REDIS_URL,
-    auto_connect=False  # Don't connect to Redis until first request
-)
-
-@app.on_event("startup")
-async def startup_event():
-    """
-    Perform startup checks without blocking server startup.
-    Services will be checked in background.
-    """
-    logger.info("Starting API server...")
-    asyncio.create_task(check_database_connection())
-    asyncio.create_task(check_redis_connection())
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    db_ok = await check_database_connection()
-    redis_ok = await check_redis_connection()
-    return {
-        "status": "healthy" if db_ok and redis_ok else "degraded",
-        "database": "connected" if db_ok else "disconnected",
-        "redis": "connected" if redis_ok else "disconnected",
-        "timestamp": datetime.utcnow().isoformat()
-    }
-
-# Configure CORS with WebSocket support
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,  # Use configured origins
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
-    allow_websockets=True,
+    allow_headers=["*"]
 )
 
-# Include routers
-app.include_router(users.router, prefix="/users", tags=["users"])
-app.include_router(subscriptions.router, prefix="/subscriptions", tags=["subscriptions"])
-app.include_router(vpn.router, prefix="/vpn", tags=["vpn"])
-app.include_router(metrics.router, tags=["metrics"])
-app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
+# Include API routers with proper structure
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
+app.include_router(subscriptions.router, prefix="/api/v1/subscriptions", tags=["Subscriptions"])
+app.include_router(vpn.router, prefix="/api/v1/vpn", tags=["VPN"])
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to Prime VPN API"}
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint with rate limiting status"""
     return {
-        "status": "healthy",
+        "message": "Prime VPN API",
         "version": "1.0.2",
-        "rate_limiting": {
-            "enabled": settings.RATE_LIMIT_ENABLED,
-            "ddos_protection": settings.DDOS_PROTECTION_ENABLED
-        },
-        "timestamp": datetime.now().isoformat()
+        "docs": "/docs",
+        "endpoints": {
+            "auth": "/api/v1/auth",
+            "users": "/api/v1/users", 
+            "subscriptions": "/api/v1/subscriptions",
+            "vpn": "/api/v1/vpn"
+        }
     }
 
-@app.get("/metrics")
-async def metrics():
-    """Basic metrics endpoint"""
-    from app.services.rate_limit_service import rate_limit_service
-    try:
-        stats = await rate_limit_service.get_rate_limit_stats()
-        return {
-            "rate_limiting": stats,
-            "timestamp": datetime.now().isoformat()
-        }
-    except Exception:
-        return {"error": "Unable to fetch metrics"}
+@app.get("/health")
+async def health():
+    db_ok = await check_database()
+    return {
+        "status": "healthy" if db_ok else "degraded",
+        "database": "connected" if db_ok else "disconnected",
+        "timestamp": datetime.now().isoformat(),
+        "version": "1.0.2"
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

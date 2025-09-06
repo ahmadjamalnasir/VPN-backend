@@ -1,38 +1,34 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
+from uuid import UUID
 
-
-class VPNServerInfo(BaseModel):
-    id: str  # UUID
+class VPNServerResponse(BaseModel):
+    id: UUID
     hostname: str
-    ip_address: str
     location: str
-    endpoint: str  # ip:port
-
+    ip_address: str
+    endpoint: str
+    status: str
+    current_load: float
+    ping: int
+    
     class Config:
         from_attributes = True
 
+class VPNConnectRequest(BaseModel):
+    server_id: Optional[UUID] = None
+    location: Optional[str] = None
+    client_public_key: str
 
 class VPNConnectionResponse(BaseModel):
-    connection_id: str  # UUID
-    server: VPNServerInfo
+    connection_id: UUID
+    server: VPNServerResponse
+    client_ip: str
     wg_config: str
     started_at: datetime
-    expires_at: Optional[datetime] = None
+    status: str
 
-    class Config:
-        from_attributes = True
-
-
-class VPNConnectionSummary(BaseModel):
-    connection_id: str  # UUID
-    started_at: datetime
-    ended_at: datetime
-    duration_seconds: int
-    bytes_sent: int
-    bytes_received: int
-    total_bytes: int
-
-    class Config:
-        from_attributes = True
+class VPNDisconnectRequest(BaseModel):
+    bytes_sent: int = 0
+    bytes_received: int = 0

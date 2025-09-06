@@ -6,7 +6,7 @@ import asyncio
 import random
 from app.database import get_db
 from sqlalchemy.orm import Session
-from app.services.auth_service import get_current_user_from_token
+from app.services.auth_service import get_current_user
 from app.models.vpn_connection import VPNConnection
 from app.models.user import User
 from app.models.vpn_server import VPNServer

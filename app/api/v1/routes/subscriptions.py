@@ -1,26 +1,37 @@
-from fastapi import APIRouter, Depends, HTTPException
-from app.schemas.subscription import SubscriptionResponse
-from app.models.subscription import Subscription
-from app.services.auth_service import get_current_user
-from app.models.user import User
+from fastapi import APIRouter, Depends
 from app.database import get_db
-from sqlalchemy.orm import Session
-from uuid import UUID
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
 
-
-@router.get("/status", response_model=SubscriptionResponse)
+@router.get("/status")
 async def get_subscription_status(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
-    # Fetch subscription for user
-    subscription = db.query(Subscription).filter(
-        Subscription.user_id == current_user.id
-    ).first()
-    
-    if not subscription:
-        raise HTTPException(status_code=404, detail="Subscription not found")
-    
-    return subscription
+    """Get subscription status (placeholder)"""
+    return {
+        "plan_type": "free",
+        "status": "active",
+        "start_date": "2024-01-01T00:00:00Z",
+        "end_date": "2024-12-31T23:59:59Z"
+    }
+
+@router.get("/plans")
+async def get_subscription_plans():
+    """Get available subscription plans"""
+    return {
+        "plans": [
+            {
+                "id": "free",
+                "name": "Free Plan",
+                "price": 0,
+                "features": ["Basic VPN access", "1 device"]
+            },
+            {
+                "id": "premium",
+                "name": "Premium Plan",
+                "price": 9.99,
+                "features": ["Unlimited VPN access", "5 devices", "Premium servers"]
+            }
+        ]
+    }

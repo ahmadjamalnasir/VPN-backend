@@ -1,17 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
+from fastapi import APIRouter, Depends
 from app.database import get_db
-from app.models.vpn_connection import VPNConnection
-from app.models.vpn_server import VPNServer
-from app.models.user import User
-from app.models.subscription import Subscription
-from app.schemas.vpn import VPNConnectionResponse, VPNConnectionSummary
-from app.services.auth_service import get_current_user
-from app.services.wireguard_service import generate_wireguard_config
-from datetime import datetime
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
-from uuid import UUID
+from datetime import datetime
+import uuid
 
 router = APIRouter()
 

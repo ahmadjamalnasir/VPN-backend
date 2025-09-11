@@ -16,15 +16,6 @@ class SubscriptionPlanResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class SubscriptionResponse(SubscriptionPlanResponse):
-    pass
-
-class SubscriptionCreate(BaseModel):
-    plan_type: str
-    status: str
-    start_date: datetime
-    end_date: datetime
-
 class UserSubscriptionResponse(BaseModel):
     id: UUID
     user_id: UUID
@@ -32,6 +23,10 @@ class UserSubscriptionResponse(BaseModel):
     status: str
     start_date: datetime
     end_date: datetime
+    auto_renew: bool
+    payment_method: Optional[str]
+    is_active: bool
+    days_remaining: int
     created_at: datetime
     
     class Config:
@@ -40,3 +35,5 @@ class UserSubscriptionResponse(BaseModel):
 class AssignSubscriptionRequest(BaseModel):
     user_email: str
     plan_id: int
+    auto_renew: bool = True
+    payment_method: Optional[str] = None

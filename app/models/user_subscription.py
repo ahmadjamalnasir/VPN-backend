@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, CheckConstraint
+from sqlalchemy import Column, String, DateTime, ForeignKey, CheckConstraint, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -14,14 +14,34 @@ class UserSubscription(Base):
     status = Column(String(10), nullable=False, default="active")
     start_date = Column(DateTime, nullable=False)
     end_date = Column(DateTime, nullable=False)
+    auto_renew = Column(Boolean, default=True, nullable=False)
+    payment_method = Column(String, nullable=True)  # "stripe", "paypal", etc.
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     
     # Constraints
     __table_args__ = (
-        CheckConstraint("status IN ('active', 'expired', 'canceled')", name="valid_subscription_status"),
+        CheckConstraint("status IN ('active', 'expired', 'canceled', 'pending')", name="valid_subscription_status"),
     )
     
     # Relationships
     user = relationship("User", back_populates="user_subscriptions")
     plan = relationship("SubscriptionPlan", back_populates="user_subscriptions")
+    
+    @property
+    def is_active(self) -> bool:
+        """Check if subscription is currently active"""
+        from datetime import datetime
+        return (
+            self.status == "active" and 
+            self.start_date <= datetime.utcnow() <= self.end_date
+        )
+    
+    @property
+    def days_remaining(self) -> int:
+        """Get days remaining in subscription"""
+        from datetime import datetime
+        if self.status != "active":
+            return 0
+        remaining = (self.end_date - datetime.utcnow()).days
+        return max(0, remaining)

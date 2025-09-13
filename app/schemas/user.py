@@ -10,6 +10,15 @@ class UserSignupRequest(BaseModel):
     phone: Optional[str] = None
     country: Optional[str] = None
 
+class UserCreate(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+    phone: Optional[str] = None
+    country: Optional[str] = None
+    is_premium: bool = False
+    is_superuser: bool = False
+
 class UserResponse(BaseModel):
     id: UUID
     user_id: int

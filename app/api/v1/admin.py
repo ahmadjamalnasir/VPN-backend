@@ -20,15 +20,36 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 async def verify_admin(current_user_id: str = Depends(verify_token), db: AsyncSession = Depends(get_db)):
-    """Verify user has admin privileges"""
+    """Verify user has admin privileges (view-only)"""
     from app.models.admin_user import AdminUser
-    result = await db.execute(select(AdminUser).where(AdminUser.id == current_user_id))
-    admin_user = result.scalar_one_or_none()
-    if not admin_user:
-        safe_user_id = sanitize_for_logging(current_user_id)
-        logger.warning(f"Unauthorized admin access attempt: {safe_user_id}")
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return admin_user
+    from uuid import UUID
+    try:
+        admin_uuid = UUID(current_user_id)
+        result = await db.execute(select(AdminUser).where(AdminUser.id == admin_uuid))
+        admin_user = result.scalar_one_or_none()
+        if not admin_user:
+            safe_user_id = sanitize_for_logging(current_user_id)
+            logger.warning(f"Unauthorized admin access attempt: {safe_user_id}")
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return admin_user
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Invalid admin token")
+
+async def verify_super_admin(current_user_id: str = Depends(verify_token), db: AsyncSession = Depends(get_db)):
+    """Verify user has super admin privileges (full access)"""
+    from app.models.admin_user import AdminUser, AdminRole
+    from uuid import UUID
+    try:
+        admin_uuid = UUID(current_user_id)
+        result = await db.execute(select(AdminUser).where(AdminUser.id == admin_uuid))
+        admin_user = result.scalar_one_or_none()
+        if not admin_user or admin_user.role != AdminRole.SUPER_ADMIN:
+            safe_user_id = sanitize_for_logging(current_user_id)
+            logger.warning(f"Unauthorized super admin access attempt: {safe_user_id}")
+            raise HTTPException(status_code=403, detail="Super admin access required")
+        return admin_user
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Invalid admin token")
 
 @router.get("/dashboard", response_model=AdminDashboardResponse)
 async def get_admin_dashboard(
@@ -150,7 +171,7 @@ async def create_admin_user(
     password: str = Query(..., description="Admin password"),
     full_name: str = Query(..., description="Admin full name"),
     role: str = Query("admin", description="Admin role: super_admin, admin, moderator"),
-    admin_user = Depends(verify_admin),
+    admin_user = Depends(verify_super_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """Create new admin user"""
@@ -197,7 +218,7 @@ async def create_admin_user(
 async def update_user_status(
     user_id: int,
     request: AdminUserUpdateRequest,
-    admin_user = Depends(verify_admin),
+    admin_user = Depends(verify_super_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """Update user status (admin only)"""
@@ -240,7 +261,7 @@ async def update_user_status(
 @router.post("/servers", response_model=VPNServerResponse)
 async def create_vpn_server(
     request: CreateVPNServerRequest,
-    admin_user = Depends(verify_admin),
+    admin_user = Depends(verify_super_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """Create new VPN server"""
@@ -293,7 +314,7 @@ async def create_vpn_server(
 async def update_vpn_server(
     server_id: str,
     request: UpdateVPNServerRequest,
-    admin_user = Depends(verify_admin),
+    admin_user = Depends(verify_super_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """Update VPN server configuration"""
@@ -342,7 +363,7 @@ async def update_vpn_server(
 @router.delete("/servers/{server_id}")
 async def delete_vpn_server(
     server_id: str,
-    admin_user = Depends(verify_admin),
+    admin_user = Depends(verify_super_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """Delete VPN server"""

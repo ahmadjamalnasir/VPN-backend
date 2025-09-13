@@ -213,10 +213,14 @@ def generate_wireguard_keys():
 # Create separate admin user (recommended approach):
 python3 create_admin_user.py
 
-# Default admin credentials:
+# Default super admin credentials:
 # Username: admin
 # Password: admin123
 # Email: admin@primevpn.com
+# Role: SUPER_ADMIN (full access)
+
+# Create additional admin users via API:
+# POST /api/v1/admin/create-admin-user (Super Admin only)
 ```
 
 ## 📚 Understanding the Application
@@ -225,8 +229,9 @@ python3 create_admin_user.py
 1. **Mobile-First Design** → Optimized endpoints for mobile app integration
 2. **Admin Role Separation** → Secure admin-only endpoints with proper verification
 3. **Separate User Systems** → VPN users and admin users in separate tables with dedicated creation endpoints
-4. **JWT-Based Security** → Token validation with role checking on all protected routes
-5. **Real-time Features** → Separate WebSocket channels for mobile and admin
+4. **Role-Based Permissions** → Super Admin (full access) vs Admin (view-only access)
+5. **JWT-Based Security** → Token validation with role checking on all protected routes
+6. **Real-time Features** → Separate WebSocket channels for mobile and admin
 
 ### Core Flow:
 1. **Mobile User Registration** → Email verification → Login (JWT token)
@@ -252,6 +257,22 @@ python3 create_admin_user.py
 - Comprehensive user management with search/pagination
 - System analytics and performance monitoring
 - Real-time dashboard updates via WebSocket
+- Role-based permissions (Super Admin vs Admin)
+
+#### Role-Based Permissions:
+- **Super Admin** (`SUPER_ADMIN`): Full system access
+  - Create/modify/delete VPN users and admin users
+  - Manage VPN servers (create/update/delete)
+  - Update user status and permissions
+  - All view permissions
+- **Admin** (`ADMIN`): View-only access
+  - View VPN users and admin users
+  - View dashboard and analytics
+  - View system health and metrics
+  - Cannot create or modify anything
+- **Moderator** (`MODERATOR`): Limited view access
+  - Basic user lists and analytics
+  - Limited dashboard access
 
 ## 🚀 Production Deployment Checklist
 

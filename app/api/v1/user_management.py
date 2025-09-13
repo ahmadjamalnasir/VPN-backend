@@ -25,17 +25,35 @@ class CreateAdminUserRequest(BaseModel):
     role: str = "admin"  # "super_admin", "admin", "moderator"
 
 async def verify_admin_access(current_user_id: str = Depends(verify_token), db: AsyncSession = Depends(get_db)):
-    """Verify user has admin privileges"""
-    admin_result = await db.execute(select(AdminUser).where(AdminUser.id == current_user_id))
-    admin_user = admin_result.scalar_one_or_none()
-    if not admin_user:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return admin_user
+    """Verify user has admin privileges (view-only)"""
+    from uuid import UUID
+    try:
+        admin_uuid = UUID(current_user_id)
+        admin_result = await db.execute(select(AdminUser).where(AdminUser.id == admin_uuid))
+        admin_user = admin_result.scalar_one_or_none()
+        if not admin_user:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return admin_user
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Invalid admin token")
+
+async def verify_super_admin_access(current_user_id: str = Depends(verify_token), db: AsyncSession = Depends(get_db)):
+    """Verify user has super admin privileges (full access)"""
+    from uuid import UUID
+    try:
+        admin_uuid = UUID(current_user_id)
+        admin_result = await db.execute(select(AdminUser).where(AdminUser.id == admin_uuid))
+        admin_user = admin_result.scalar_one_or_none()
+        if not admin_user or admin_user.role != AdminRole.SUPER_ADMIN:
+            raise HTTPException(status_code=403, detail="Super admin access required")
+        return admin_user
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Invalid admin token")
 
 @router.post("/create-vpn-user")
 async def create_vpn_user(
     request: CreateVPNUserRequest,
-    admin_user: AdminUser = Depends(verify_admin_access),
+    admin_user = Depends(verify_super_admin_access),
     db: AsyncSession = Depends(get_db)
 ):
     """Create VPN user - saves to users table"""
@@ -75,7 +93,7 @@ async def create_vpn_user(
 @router.post("/create-admin-user")
 async def create_admin_user(
     request: CreateAdminUserRequest,
-    admin_user: AdminUser = Depends(verify_admin_access),
+    admin_user = Depends(verify_super_admin_access),
     db: AsyncSession = Depends(get_db)
 ):
     """Create admin user - saves to admin_users table"""

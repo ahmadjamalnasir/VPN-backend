@@ -46,18 +46,30 @@ WS /api/v1/websocket/connection?token=jwt_token        # Real-time connection st
 
 ## 🔧 ADMIN BACKOFFICE ENDPOINTS
 
-### VPN User Management (`/api/v1/users`) - Admin JWT Required
+### VPN User Management (`/api/v1/users`) - Role-Based Access
 ```http
+# View Access (Admin + Super Admin)
 GET /api/v1/users/?skip=0&limit=100&search=john       # List all VPN users with pagination/search
 GET /api/v1/users/by-id/{user_id}                     # Get specific VPN user by ID
+
+# Modification Access (Super Admin Only)
 PUT /api/v1/users/status/{user_id}?is_active=true&is_premium=false&is_superuser=false  # Update VPN user status
 ```
 
-### Admin User Management (`/api/v1/admin`) - Admin JWT Required
+### Admin User Management (`/api/v1/admin`) - Role-Based Access
 ```http
+# View Access (Admin + Super Admin)
 GET  /api/v1/admin/admin-users?skip=0&limit=100       # List all admin users
+GET  /api/v1/admin/dashboard                          # Admin dashboard stats
+GET  /api/v1/admin/rate-limits/config                # Rate limiting config
+
+# Modification Access (Super Admin Only)
 POST /api/v1/admin/create-admin-user                  # Create new admin user
 POST /api/v1/admin/create-vpn-user                    # Create new VPN user
+PUT  /api/v1/admin/users/{user_id}/status             # Update user status
+POST /api/v1/admin/servers                           # Create VPN server
+PUT  /api/v1/admin/servers/{server_id}               # Update VPN server
+DEL  /api/v1/admin/servers/{server_id}               # Delete VPN server
 ```
 
 ### Subscription Management (`/api/v1/subscriptions`) - Admin JWT Required
@@ -104,10 +116,10 @@ Authorization: Bearer <jwt_token>
 ### Role-Based Access Control
 - **Mobile Users**: Access to own profile, connections, and subscriptions only
 - **Premium Users**: Additional access to personal analytics
-- **Admin Users**: Full access to all user management and system data
-  - **Super Admin**: Full system access, user management, server management
-  - **Admin**: User management, analytics, limited server access
-  - **Moderator**: Read-only access to users and analytics
+- **Admin Users**: Role-based access with different permission levels
+  - **Super Admin**: Full system access (create/modify/delete users, servers, settings)
+  - **Admin**: View-only access (read users, analytics, dashboard)
+  - **Moderator**: Limited view access (basic analytics and user lists)
 - **Rate Limiting**: Admin users are exempt from rate limiting
 
 ### Admin Authentication Flow
@@ -243,6 +255,24 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
   "full_name": "John Admin",
   "role": "admin"
 }
+```
+
+### Role-Based Permission Examples
+```bash
+# Admin (View-Only) - Can access these endpoints:
+GET /api/v1/users/                    # ✅ View VPN users
+GET /api/v1/admin/admin-users         # ✅ View admin users
+GET /api/v1/admin/dashboard           # ✅ View dashboard
+
+# Admin (View-Only) - Cannot access these endpoints:
+POST /api/v1/admin/create-vpn-user    # ❌ 403: Super admin access required
+PUT /api/v1/admin/users/123/status    # ❌ 403: Super admin access required
+POST /api/v1/admin/servers            # ❌ 403: Super admin access required
+
+# Super Admin - Can access all endpoints
+POST /api/v1/admin/create-vpn-user    # ✅ Full access
+PUT /api/v1/admin/users/123/status    # ✅ Full access
+POST /api/v1/admin/servers            # ✅ Full access
 ```
 
 ### VPN User List

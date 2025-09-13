@@ -6,7 +6,7 @@ from app.models.user import User
 from app.models.vpn_server import VPNServer
 from app.models.connection import Connection
 from app.schemas.vpn import VPNServerResponse, VPNConnectRequest, VPNConnectionResponse, VPNDisconnectResponse
-from app.schemas.connection import ConnectionResponse
+from app.services.auth import verify_token
 from uuid import UUID
 from datetime import datetime
 from typing import List, Optional
@@ -20,6 +20,7 @@ async def get_vpn_servers(
     is_premium: Optional[bool] = Query(None, description="Filter premium servers"),
     db: AsyncSession = Depends(get_db)
 ):
+    """Get available VPN servers"""
     query = select(VPNServer).where(VPNServer.status == "active")
     if location:
         query = query.where(VPNServer.location == location)
@@ -33,14 +34,27 @@ async def get_vpn_servers(
 @router.post("/connect", response_model=VPNConnectionResponse)
 async def connect_vpn(
     request: VPNConnectRequest,
-    user_email: str = Query(..., description="User email"),
+    user_id: int,
+    current_user_id: str = Depends(verify_token),
     db: AsyncSession = Depends(get_db)
 ):
-    # Find user
-    user_result = await db.execute(select(User).where(User.email == user_email))
+    """Connect user to VPN server"""
+    # Find user by readable ID
+    user_result = await db.execute(select(User).where(User.user_id == user_id))
     user = user_result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify access
+    if str(user.id) != current_user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Validate user profile
+    if not user.is_active:
+        raise HTTPException(status_code=400, detail="User account is inactive")
+    
+    if not user.is_email_verified:
+        raise HTTPException(status_code=400, detail="Email verification required")
     
     # Check for existing active connection
     existing = await db.execute(
@@ -118,16 +132,22 @@ AllowedIPs = 0.0.0.0/0"""
 @router.post("/disconnect", response_model=VPNDisconnectResponse)
 async def disconnect_vpn(
     connection_id: UUID = Query(..., description="Connection ID"),
-    user_email: str = Query(..., description="User email"),
+    user_id: int = Query(..., description="User ID"),
     bytes_sent: int = Query(0, description="Bytes sent"),
     bytes_received: int = Query(0, description="Bytes received"),
+    current_user_id: str = Depends(verify_token),
     db: AsyncSession = Depends(get_db)
 ):
+    """Disconnect VPN connection"""
     # Find user
-    user_result = await db.execute(select(User).where(User.email == user_email))
+    user_result = await db.execute(select(User).where(User.user_id == user_id))
     user = user_result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify access
+    if str(user.id) != current_user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     
     # Find connection
     result = await db.execute(

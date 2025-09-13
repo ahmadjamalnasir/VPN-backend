@@ -1,16 +1,13 @@
-from fastapi import WebSocket, WebSocketDisconnect, Depends, HTTPException
-from typing import Dict, Optional
+from fastapi import WebSocket, WebSocketDisconnect
+from typing import Dict
 from datetime import datetime
 import json
 import asyncio
 import random
 from app.database import get_db
-from sqlalchemy.orm import Session
-from app.services.auth_service import get_current_user
-from app.models.vpn_connection import VPNConnection
-from app.models.user import User
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.models.connection import Connection
 from app.models.vpn_server import VPNServer
-
 
 class ConnectionManager:
     def __init__(self):
@@ -28,13 +25,13 @@ class ConnectionManager:
             self.metrics_tasks[user_id].cancel()
             del self.metrics_tasks[user_id]
 
-    async def start_metrics(self, user_id: str, connection_id: str, db: Session):
+    async def start_metrics(self, user_id: str, connection_id: str, db: AsyncSession):
         """Start sending metrics for a user's connection"""
         self.metrics_tasks[user_id] = asyncio.create_task(
             self._send_metrics(user_id, connection_id, db)
         )
 
-    async def _send_metrics(self, user_id: str, connection_id: str, db: Session):
+    async def _send_metrics(self, user_id: str, connection_id: str, db: AsyncSession):
         """Simulated metrics generator and sender"""
         try:
             websocket = self.active_connections[user_id]
@@ -44,7 +41,8 @@ class ConnectionManager:
 
             while True:
                 # Get current connection stats
-                connection = db.query(VPNConnection).get(connection_id)
+                result = await db.get(Connection, connection_id)
+                connection = result
                 if not connection or connection.status != "connected":
                     await websocket.close()
                     break
@@ -57,19 +55,20 @@ class ConnectionManager:
                 bytes_received = connection.bytes_received + random.randint(200000, 800000)
 
                 # Calculate speeds in Mbps
-                sent_speed = (bytes_sent - last_bytes_sent) * 8 / (1024 * 1024 * time_delta)
-                received_speed = (bytes_received - last_bytes_received) * 8 / (1024 * 1024 * time_delta)
+                sent_speed = (bytes_sent - last_bytes_sent) * 8 / (1024 * 1024 * time_delta) if time_delta > 0 else 0
+                received_speed = (bytes_received - last_bytes_received) * 8 / (1024 * 1024 * time_delta) if time_delta > 0 else 0
 
                 # Update database
                 connection.bytes_sent = bytes_sent
                 connection.bytes_received = bytes_received
-                db.commit()
+                await db.commit()
 
                 # Get server metrics
                 server = connection.server
-                server.current_load = min(1.0, server.current_load + random.uniform(-0.05, 0.05))
-                server.ping = max(10, min(200, server.ping + random.randint(-5, 5)))
-                db.commit()
+                if server:
+                    server.current_load = min(1.0, max(0.0, server.current_load + random.uniform(-0.05, 0.05)))
+                    server.ping = max(10, min(200, server.ping + random.randint(-5, 5)))
+                    await db.commit()
 
                 # Prepare metrics
                 metrics = {
@@ -79,8 +78,8 @@ class ConnectionManager:
                     "bytes_received": bytes_received,
                     "upload_speed_mbps": round(sent_speed, 2),
                     "download_speed_mbps": round(received_speed, 2),
-                    "ping_ms": server.ping,
-                    "server_load_pct": round(server.current_load * 100, 1)
+                    "ping_ms": server.ping if server else 50,
+                    "server_load_pct": round((server.current_load if server else 0.5) * 100, 1)
                 }
 
                 # Send metrics
@@ -99,7 +98,6 @@ class ConnectionManager:
         except Exception as e:
             print(f"Error in metrics task: {e}")
             self.disconnect(user_id)
-
 
 # Global connection manager
 manager = ConnectionManager()

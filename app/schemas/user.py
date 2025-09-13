@@ -16,6 +16,7 @@ class UserCreate(UserSignupRequest):
 class UserUpdateRequest(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
+    country: Optional[str] = None
     password: Optional[str] = None
 
 class UserResponse(BaseModel):

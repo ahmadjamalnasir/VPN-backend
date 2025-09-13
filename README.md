@@ -1,242 +1,282 @@
-# Prime VPN Backend
+# Prime VPN Backend v2.0.0
 
-A robust and secure backend service for managing VPN connections, user subscriptions, and real-time metrics with premium access control.
+A production-ready VPN backend API with comprehensive admin panel, mobile optimization, real-time analytics, and enterprise-grade security features.
 
 ## 🚀 Features
 
-- 🔐 User Authentication with Email Verification & Password Reset
-- 👤 User Management with Readable IDs & Profile Updates
-- 💳 Independent Subscription Plans with Premium Access Control
-- 🌐 VPN Server Management with Premium/Free Tier Separation
-- 📊 Connection History & Session Stats (Premium Only)
-- 🔄 Smart Server Selection with Load Balancing
-- 🔒 WireGuard VPN Integration
-- 📈 Real-time Connection Analytics & Usage Tracking
-- 💰 Auto-renewal & Payment Method Tracking
+- 🔐 **JWT Authentication** with email verification & password reset
+- 👤 **User Management** with readable IDs & premium subscriptions
+- 💳 **Subscription System** with auto-renewal & payment tracking
+- 🌐 **VPN Server Management** with premium/free tier separation
+- 📊 **Real-time Analytics** with usage tracking & performance metrics
+- 🛡️ **Advanced Security** with DDoS protection & rate limiting
+- 📱 **Mobile Optimized APIs** with quick connect & real-time status
+- 🔧 **Admin Dashboard** with comprehensive management tools
+- 🔌 **WebSocket Support** for real-time updates
+- 📈 **Health Monitoring** with system metrics & alerts
 
-## 🛠️ Tech Stack
-
-- **FastAPI** (Python 3.9+) with async/await
-- **PostgreSQL** with SQLAlchemy ORM
-- **JWT Authentication** with OTP verification
-- **Redis** for session management
-- **Stripe Integration** for payments
-- **WireGuard** VPN protocol
-
-## 📁 Project Structure
+## 🏗️ Architecture Overview
 
 ```
 VPN-backend/
 ├── app/
-│   ├── api/v1/
-│   │   ├── auth.py              # Authentication & OTP
-│   │   ├── users.py             # User management & connections
-│   │   ├── subscriptions.py     # Subscription management
-│   │   └── vpn.py              # VPN servers & connections
-│   ├── models/
-│   │   ├── user.py             # User with readable ID & premium status
-│   │   ├── subscription_plan.py # Independent subscription plans
-│   │   ├── user_subscription.py # User-plan assignments
-│   │   ├── vpn_server.py       # VPN servers with premium flag
-│   │   ├── connection.py       # Connection tracking with duration
-│   │   └── otp_verification.py # Email verification & password reset
-│   ├── schemas/                # Pydantic request/response models
-│   ├── services/               # Business logic & OTP service
-│   └── main.py                # Application entry point
-└── requirements.txt
+│   ├── api/v1/              # Modern API endpoints (ACTIVE)
+│   │   ├── auth.py          # Authentication & OTP
+│   │   ├── users.py         # User management & connections
+│   │   ├── subscriptions.py # Subscription management
+│   │   ├── vpn.py          # VPN servers & connections
+│   │   ├── admin.py        # Admin dashboard & management
+│   │   ├── mobile.py       # Mobile-optimized endpoints
+│   │   ├── analytics.py    # Usage analytics & metrics
+│   │   ├── health.py       # System health monitoring
+│   │   └── websocket.py    # Real-time WebSocket APIs
+│   ├── models/             # Database models
+│   │   ├── user.py         # User with readable ID & premium status
+│   │   ├── subscription_plan.py    # Independent subscription plans
+│   │   ├── user_subscription.py    # User-plan assignments
+│   │   ├── vpn_server.py          # VPN servers with premium flag
+│   │   ├── connection.py          # Connection tracking with stats
+│   │   └── otp_verification.py    # Email verification & password reset
+│   ├── schemas/            # Pydantic request/response models
+│   ├── services/           # Business logic & external services (CLEANED)
+│   │   ├── auth.py         # JWT & password services
+│   │   ├── otp_service.py  # Email verification
+│   │   ├── payment.py      # Stripe integration
+│   │   ├── vpn_service.py  # VPN server management
+│   │   ├── metrics_service.py # Real-time metrics
+│   │   ├── rate_limit_service.py # Advanced rate limiting
+│   │   ├── redis_service.py # Redis operations
+│   │   └── wireguard_service.py # WireGuard integration
+│   ├── middleware/         # Security middleware (DDoS, rate limiting)
+│   ├── utils/             # Security utilities & helpers
+│   ├── core/              # Configuration & settings
+│   └── main.py            # Application entry point
+├── alembic/               # Database migrations
+├── requirements.txt       # Python dependencies
+└── API_DOCUMENTATION.md   # Complete API reference
 ```
 
-## 🔌 API Endpoints
+## 🗑️ Removed Components (v2.0.0 Cleanup)
 
-### Authentication (`/api/v1/auth`)
-```http
-POST /signup              # Register with name, email, password, phone, country
-POST /verify-email        # Verify email with OTP code
-POST /login              # Login with email validation
-POST /forgot-password    # Send password reset OTP
-POST /reset-password     # Reset password with OTP verification
-```
+### **Duplicate Services Removed:**
+- ❌ `app/services/auth_service.py` - **DUPLICATE** (replaced by `auth.py`)
+- ❌ `app/services/payment_service.py` - **DUPLICATE** (replaced by `payment.py`)
+- ❌ `app/services/subscription_service.py` - **NON-FUNCTIONAL** (referenced non-existent models)
 
-### Users (`/api/v1/users`)
-```http
-GET  /profile?email=user@example.com        # Get user profile
-GET  /by-id/{user_id}                       # Get user by readable ID
-GET  /connections?email=user@example.com    # Connection history (Premium only)
-PUT  /update?email=user@example.com         # Update name, phone, password
-PUT  /status/{user_id}                      # Update active/premium status
-```
+### **Legacy API Structure Removed:**
+- ❌ `app/routers/` - **OLD SYSTEM** (replaced by `app/api/v1/`)
+  - `auth.py`, `users.py`, `vpn.py`, `payments.py`, `subscription.py`
+- ❌ `app/dependencies/` - **OLD AUTH SYSTEM** (replaced by modern JWT auth)
+- ❌ `app/schemas/vpn_server.py` - **DUPLICATE** (functionality moved to `vpn.py`)
 
-### Subscriptions (`/api/v1/subscriptions`)
-```http
-GET  /plans                                 # List all subscription plans
-GET  /user?email=user@example.com           # Get user's active subscription
-POST /assign                               # Assign plan to user
-PUT  /cancel?email=user@example.com         # Cancel subscription
-```
+### **Impact of Removals:**
+- ✅ **No Functionality Lost** - All features migrated to modern system
+- ✅ **Improved Performance** - Single async system instead of mixed sync/async
+- ✅ **Better Security** - Consolidated auth with comprehensive validation
+- ✅ **Cleaner Code** - No duplicate imports or circular dependencies
 
-### VPN (`/api/v1/vpn`)
-```http
-GET  /servers?is_premium=true&location=us-east  # Get servers with filters
-POST /connect?user_email=user@example.com       # Connect with premium validation
-POST /disconnect                               # Disconnect with session stats
-```
+## 🔧 Step-by-Step Setup Guide
 
-## 🗄️ Database Schema
-
-### Users Table
-- `user_id` (readable integer ID)
-- `name`, `email`, `phone`, `country`
-- `is_premium`, `is_email_verified`
-- `hashed_password`
-
-### Subscription Plans (Independent)
-- `plan_id`, `name`, `plan_type`, `price`
-- `duration_days`, `is_premium`
-- `features` (JSON)
-
-### User Subscriptions (Links users to plans)
-- `user_id` → `users.id`
-- `plan_id` → `subscription_plans.id`
-- `status`, `start_date`, `end_date`
-- `auto_renew`, `payment_method`
-
-### VPN Servers
-- `hostname`, `location`, `ip_address`
-- `is_premium` (premium server access)
-- `current_load`, `ping`, `status`
-
-### Connections (Session tracking)
-- `user_id`, `server_id`, `client_ip`
-- `bytes_sent`, `bytes_received`
-- `duration_seconds`, `started_at`, `ended_at`
-
-## 🔒 Premium Access Control
-
-### Free Users
-- Access only `is_premium=false` servers
-- Cannot view connection history
-- Basic server locations
-
-### Premium Users  
-- Access all servers (premium + free)
-- Full connection history with stats
-- All server locations
-- Priority server selection
-
-## 🧪 API Examples
-
-### User Signup & Verification
+### 1. Environment Setup
 ```bash
-# 1. Signup
-curl -X POST http://localhost:8000/api/v1/auth/signup \
-  -H "Content-Type: application/json" \
-  -d '{"name":"John Doe","email":"john@example.com","password":"secure123","phone":"+1234567890","country":"US"}'
-
-# 2. Verify email (OTP sent to email)
-curl -X POST http://localhost:8000/api/v1/auth/verify-email \
-  -H "Content-Type: application/json" \
-  -d '{"email":"john@example.com","otp_code":"123456"}'
-
-# 3. Login
-curl -X POST http://localhost:8000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"john@example.com","password":"secure123"}'
-```
-
-### VPN Connection Flow
-```bash
-# 1. Get available servers
-curl "http://localhost:8000/api/v1/vpn/servers?is_premium=false"
-
-# 2. Connect to VPN
-curl -X POST "http://localhost:8000/api/v1/vpn/connect?user_email=john@example.com" \
-  -H "Content-Type: application/json" \
-  -d '{"client_public_key":"wireguard_key","location":"us-east"}'
-
-# 3. Disconnect with stats
-curl -X POST "http://localhost:8000/api/v1/vpn/disconnect?connection_id=uuid&user_email=john@example.com&bytes_sent=1048576&bytes_received=2097152"
-```
-
-### Connection History (Premium Only)
-```bash
-curl "http://localhost:8000/api/v1/users/connections?email=premium@example.com&limit=10"
-```
-
-## 🚀 Quick Start
-
-### 1. Setup Environment
-```bash
-git clone https://github.com/yourusername/VPN-backend.git
+# Clone repository
+git clone <repository-url>
 cd VPN-backend
+
+# Create virtual environment
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 2. Configure Database
+### 2. Database Configuration
 ```bash
-# Update .env file
-DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/primevpn
-JWT_SECRET=your-secret-key
+# Install PostgreSQL
+# Create database: primevpn
+
+# Update database URL in .env
+DATABASE_URL=postgresql+asyncpg://username:password@localhost:5432/primevpn
+```
+
+### 3. Redis Setup (Required for Security Features)
+```bash
+# Install Redis
+# Start Redis server: redis-server
+
+# Update Redis URL in .env
 REDIS_URL=redis://localhost:6379
 ```
 
-### 3. Initialize Data
-```bash
-# Insert subscription plans
-python insert_subscription_plans.py
+### 4. Environment Variables (.env file)
+```env
+# Application
+APP_NAME="Prime VPN"
+DEBUG=true
 
-# Insert sample VPN servers
+# JWT Authentication
+JWT_SECRET="your-secret-key-change-in-production"
+JWT_ALGORITHM="HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# Database
+DATABASE_URL="postgresql+asyncpg://username:password@localhost:5432/primevpn"
+
+# Redis
+REDIS_URL="redis://localhost:6379"
+
+# CORS
+ALLOWED_ORIGINS=["http://localhost:3000","https://yourdomain.com"]
+ALLOWED_HOSTS=["localhost","127.0.0.1","yourdomain.com"]
+
+# Stripe Payment
+STRIPE_SECRET_KEY="sk_live_your_stripe_secret_key"
+STRIPE_PUBLISHABLE_KEY="pk_live_your_stripe_publishable_key"
+STRIPE_WEBHOOK_SECRET="whsec_your_webhook_secret"
+
+# Security
+DDOS_PROTECTION_ENABLED=true
+RATE_LIMIT_ENABLED=true
+DDOS_WHITELIST_IPS=["127.0.0.1","::1"]
+```
+
+### 5. Database Migration
+```bash
+# Initialize Alembic (if not done)
+alembic init alembic
+
+# Run migrations
+alembic upgrade head
+
+# Insert sample data
+python insert_subscription_plans.py
 python insert_sample_data.py
 ```
 
-### 4. Start Server
+### 6. Start Server
 ```bash
 python start_server.py
 # Server runs on http://localhost:8000
 # API docs: http://localhost:8000/docs
 ```
 
-### 5. Test APIs
-```bash
-python test_updated_apis.py
+## 🔑 Critical Production Placeholders
+
+### ⚠️ MUST UPDATE BEFORE PRODUCTION:
+
+#### 1. JWT Security (`app/core/config.py`)
+```python
+# CHANGE THIS:
+JWT_SECRET: str = "your-secret-key-change-in-production"
+# TO: Strong random secret (use: openssl rand -hex 32)
+JWT_SECRET: str = "your-actual-256-bit-secret-key"
 ```
 
-## 📊 Session Stats Response
-```json
-{
-  "connection_id": "uuid",
-  "session_stats": {
-    "duration_seconds": 3600,
-    "duration_formatted": "01:00:00",
-    "bytes_sent": 1048576,
-    "bytes_received": 2097152,
-    "total_bytes": 3145728,
-    "total_data_mb": 3.0,
-    "avg_speed_mbps": 0.87,
-    "server_location": "us-east",
-    "client_ip": "10.0.123.45"
-  },
-  "message": "VPN disconnected successfully. Session stats recorded."
-}
-```
-
-## 🔧 Environment Variables
+#### 2. Database Configuration (`.env`)
 ```env
-# Application
-APP_NAME="Prime VPN"
-DEBUG=true
-JWT_SECRET="your-secret-key"
-
-# Database
-DATABASE_URL="postgresql+asyncpg://user:pass@localhost:5432/primevpn"
-
-# Redis
-REDIS_URL="redis://localhost:6379"
-
-# CORS
-ALLOWED_ORIGINS=["http://localhost:3000"]
+# CHANGE THIS:
+DATABASE_URL="postgresql+asyncpg://username:password@localhost:5432/primevpn"
+# TO: Production database credentials
+DATABASE_URL="postgresql+asyncpg://prod_user:secure_password@prod-db:5432/primevpn"
 ```
+
+#### 3. Stripe Payment Keys (`.env`)
+```env
+# CHANGE THESE TEST KEYS:
+STRIPE_SECRET_KEY="sk_test_your_stripe_secret_key"
+STRIPE_PUBLISHABLE_KEY="pk_test_your_stripe_publishable_key"
+# TO: Live Stripe keys
+STRIPE_SECRET_KEY="sk_live_actual_secret_key"
+STRIPE_PUBLISHABLE_KEY="pk_live_actual_publishable_key"
+```
+
+#### 4. CORS Origins (`app/core/config.py`)
+```python
+# CHANGE THIS:
+ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "https://yourdomain.com"]
+# TO: Your actual domains
+ALLOWED_ORIGINS: List[str] = ["https://your-frontend.com", "https://admin.your-domain.com"]
+```
+
+#### 5. Email Service (`app/services/otp_service.py`)
+```python
+# IMPLEMENT ACTUAL EMAIL SERVICE:
+# Replace mock email sending with real SMTP/SendGrid/AWS SES
+async def send_otp_email(email: str, otp_code: str, purpose: str):
+    # TODO: Implement actual email service
+    pass
+```
+
+#### 6. WireGuard Keys (`app/services/wireguard_service.py`)
+```python
+# REPLACE PLACEHOLDER:
+def generate_wireguard_keys():
+    # TODO: Use actual WireGuard key generation
+    private_key = os.urandom(32).hex()  # PLACEHOLDER
+    public_key = os.urandom(32).hex()   # PLACEHOLDER
+    return private_key, public_key
+```
+
+#### 7. Admin User Creation
+```sql
+-- Create first admin user in database:
+UPDATE users SET is_superuser = true WHERE email = 'admin@yourdomain.com';
+```
+
+## 📚 Understanding the Application
+
+### Modern API Architecture (v2.0.0):
+1. **Single Auth System** → JWT-based authentication across all endpoints
+2. **Async-First** → All database operations use async SQLAlchemy
+3. **Comprehensive Security** → Input validation, rate limiting, DDoS protection
+4. **Real-time Features** → WebSocket support for live updates
+
+### Core Flow:
+1. **User Registration** → Email verification → Login (JWT token)
+2. **Subscription Assignment** → Premium status update
+3. **VPN Connection** → Server selection → WireGuard config
+4. **Session Tracking** → Usage analytics → Billing data
+
+### Key Components:
+
+#### Authentication System (`app/services/auth.py`):
+- JWT token generation and verification
+- Password hashing with bcrypt
+- Token-based route protection
+
+#### Security Layer:
+- `middleware/ddos_protection.py` → IP banning & request tracking
+- `utils/security.py` → Input validation & sanitization
+- `services/rate_limit_service.py` → Advanced rate limiting
+
+#### VPN Management:
+- `models/vpn_server.py` → Server definitions with premium flags
+- `models/connection.py` → Session tracking with detailed stats
+- `api/v1/vpn.py` → Connect/disconnect with WireGuard integration
+
+## 🚀 Production Deployment Checklist
+
+- [ ] Update JWT secret key
+- [ ] Configure production database
+- [ ] Set up Redis cluster
+- [ ] Update Stripe live keys
+- [ ] Implement email service
+- [ ] Configure CORS origins
+- [ ] Set up SSL certificates
+- [ ] Create admin user
+- [ ] Configure monitoring
+- [ ] Set up backup strategy
+- [ ] Replace WireGuard key placeholders
+- [ ] Test all API endpoints
+
+## 📖 API Documentation
+
+Complete API reference available at: [API_DOCUMENTATION.md](API_DOCUMENTATION.md)
+
+## 🔒 Security
+
+Security implementation details: [SECURITY.md](SECURITY.md)
 
 ## 📝 License
 

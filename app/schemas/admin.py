@@ -1,70 +1,63 @@
-from pydantic import BaseModel, Field, validator
-from typing import Dict, List, Optional, Any
+from pydantic import BaseModel
+from typing import Optional
 from datetime import datetime
+from uuid import UUID
 
-class RateLimitStatsResponse(BaseModel):
-    total_rate_limited_keys: int = Field(..., description="Total number of rate limited keys")
-    total_banned_ips: int = Field(..., description="Total number of banned IPs")
-    endpoints: Dict[str, int] = Field(..., description="Rate limit counts by endpoint")
-    top_ips: List[Dict[str, Any]] = Field(..., description="Top rate limited IPs")
+class AdminDashboardResponse(BaseModel):
+    total_users: int
+    active_users: int
+    premium_users: int
+    total_servers: int
+    active_servers: int
+    active_connections: int
+    daily_connections: int
 
-class RateLimitStatusResponse(BaseModel):
-    endpoint: str = Field(..., description="Endpoint identifier")
-    limit: int = Field(..., description="Request limit")
-    burst: int = Field(..., description="Burst allowance")
-    window: int = Field(..., description="Time window in seconds")
-    current_requests: int = Field(..., description="Current request count")
-    burst_used: int = Field(..., description="Burst requests used")
-    remaining: int = Field(..., description="Remaining requests")
-    reset_time: int = Field(..., description="Unix timestamp when limit resets")
-
-class BanRequest(BaseModel):
-    identifier: str = Field(..., min_length=1, max_length=50, description="IP address or user ID to ban")
-    duration: int = Field(..., ge=60, le=86400, description="Ban duration in seconds (1 min to 24 hours)")
-    reason: str = Field(..., min_length=1, max_length=200, description="Reason for the ban")
+class AdminUserResponse(BaseModel):
+    id: UUID
+    user_id: int
+    name: str
+    email: str
+    phone: Optional[str]
+    country: Optional[str]
+    is_active: bool
+    is_premium: bool
+    is_superuser: bool
+    is_email_verified: bool
+    created_at: datetime
     
-    @validator('identifier')
-    def validate_identifier(cls, v):
-        import re
-        # Allow only alphanumeric, dots, colons, and hyphens (for IPs and safe identifiers)
-        if not re.match(r'^[a-zA-Z0-9.:-]+$', v):
-            raise ValueError('Identifier contains invalid characters')
-        return v
+    class Config:
+        from_attributes = True
+
+class AdminUserUpdateRequest(BaseModel):
+    is_active: Optional[bool] = None
+    is_premium: Optional[bool] = None
+    is_superuser: Optional[bool] = None
+
+class CreateVPNServerRequest(BaseModel):
+    hostname: str
+    location: str
+    ip_address: str
+    endpoint: str
+    public_key: str
+    available_ips: str
+    is_premium: bool = False
+
+class UpdateVPNServerRequest(BaseModel):
+    status: Optional[str] = None
+    is_premium: Optional[bool] = None
+    current_load: Optional[float] = None
+
+class VPNServerResponse(BaseModel):
+    id: UUID
+    hostname: str
+    location: str
+    ip_address: str
+    endpoint: str
+    status: str
+    current_load: float
+    ping: int
+    is_premium: bool
+    created_at: datetime
     
-    @validator('reason')
-    def validate_reason(cls, v):
-        import re
-        # Remove potentially dangerous characters
-        sanitized = re.sub(r'[\r\n\t\x00-\x1f\x7f-\x9f]', '', v)
-        if len(sanitized.strip()) == 0:
-            raise ValueError('Reason cannot be empty after sanitization')
-        return sanitized
-
-class BanResponse(BaseModel):
-    identifier: str
-    is_banned: bool
-    ban_data: Optional[Dict[str, Any]] = None
-
-class SecurityMetricsResponse(BaseModel):
-    rate_limiting: Dict[str, Any]
-    ddos_protection: Dict[str, Any]
-    suspicious_activity: Dict[str, Any]
-
-class RateLimitConfigResponse(BaseModel):
-    rate_limit_enabled: bool
-    ddos_protection_enabled: bool
-    global_rate_limit: int
-    ip_rate_limit: int
-    ddos_threshold: int
-    ddos_ban_duration: int
-    rate_limits: Dict[str, Dict[str, Any]]
-    whitelist_ips: List[str]
-
-class TopRateLimitedIP(BaseModel):
-    ip: str
-    total_requests: int
-    endpoints: Dict[str, int]
-
-class CleanupResponse(BaseModel):
-    message: str
-    cleaned_count: int
+    class Config:
+        from_attributes = True

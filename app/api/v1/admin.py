@@ -325,7 +325,7 @@ async def add_vpn_server(
         server = VPNServer(
             hostname=hostname,
             location=location,
-            ip_address=endpoint.split(':')[0],
+            ip_address=tunnel_ip.split('/')[0],
             endpoint=endpoint,
             public_key=public_key,
             tunnel_ip=tunnel_ip,
@@ -367,7 +367,6 @@ async def update_vpn_server(
     allowed_ips: str = Query(None, description="Allowed IPs"),
     is_premium: bool = Query(None, description="Premium server flag"),
     status: str = Query(None, description="Server status: Active, Inactive, Maintenance"),
-    current_load: float = Query(None, description="Current server load (0.0-1.0)"),
     max_connections: int = Query(None, description="Maximum connections allowed"),
     admin_user = Depends(verify_super_admin),
     db: AsyncSession = Depends(get_db)
@@ -394,14 +393,18 @@ async def update_vpn_server(
             server.location = location
         
         if endpoint is not None:
+            if ':' not in endpoint:
+                raise HTTPException(status_code=400, detail="endpoint must include port (e.g., 192.168.1.1:51820)")
             server.endpoint = endpoint
-            server.ip_address = endpoint.split(':')[0]
         
         if public_key is not None:
             server.public_key = public_key
         
         if tunnel_ip is not None:
+            if '/' not in tunnel_ip:
+                raise HTTPException(status_code=400, detail="tunnel_ip must include CIDR notation (e.g., 10.0.0.1/32)")
             server.tunnel_ip = tunnel_ip
+            server.ip_address = tunnel_ip.split('/')[0]
         
         if allowed_ips is not None:
             server.allowed_ip = allowed_ips
@@ -431,8 +434,8 @@ async def update_vpn_server(
             "location": server.location,
             "endpoint": server.endpoint,
             "public_key": server.public_key,
-            "tunnel_ip": server.ip_address,
-            "allowed_ips": server.available_ips,
+            "tunnel_ip": server.tunnel_ip,
+            "allowed_ips": server.allowed_ip,
             "is_premium": server.is_premium,
             "status": server.status,
             "max_connections": server.max_connections
@@ -441,9 +444,10 @@ async def update_vpn_server(
         raise
     except Exception as e:
         await db.rollback()
-        safe_error = sanitize_for_logging(str(e))
-        logger.error(f"Server update error: {safe_error}")
-        raise HTTPException(status_code=500, detail="Server update failed")
+        error_msg = str(e)
+        print(f"Server update error: {error_msg}")
+        logger.error(f"Server update error: {error_msg}")
+        raise HTTPException(status_code=500, detail=f"Server update failed: {error_msg}")
 
 @router.delete("/servers/{server_id}")
 async def delete_vpn_server(

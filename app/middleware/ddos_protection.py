@@ -239,6 +239,10 @@ class AdvancedRateLimitMiddleware(BaseHTTPMiddleware):
         if request.url.path in ["/health", "/metrics", "/favicon.ico"]:
             return await call_next(request)
             
+        # Skip rate limiting for admin authentication and admin users
+        if "/admin-auth/" in request.url.path or self._is_admin_user(request):
+            return await call_next(request)
+            
         client_ip = self._get_client_ip(request)
         endpoint_key = self._get_endpoint_key(request.url.path, request.method)
         
@@ -355,3 +359,22 @@ class AdvancedRateLimitMiddleware(BaseHTTPMiddleware):
         
         # Fallback: allow all requests if Redis unavailable
         return False, 0, max_requests
+    
+    def _is_admin_user(self, request: Request) -> bool:
+        """Check if request is from an admin user based on JWT token"""
+        try:
+            auth_header = request.headers.get("Authorization")
+            if not auth_header or not auth_header.startswith("Bearer "):
+                return False
+            
+            token = auth_header.split(" ")[1]
+            
+            # Simple check for admin token type (you can enhance this)
+            from jose import jwt
+            from app.core.config import get_settings
+            settings = get_settings()
+            
+            payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+            return payload.get("type") == "admin"
+        except Exception:
+            return False

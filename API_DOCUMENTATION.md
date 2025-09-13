@@ -4,79 +4,93 @@
 
 The API is designed with clear separation between **Mobile App** and **Admin Backoffice** endpoints, each with appropriate role-based access control.
 
+## 🔐 ADMIN AUTHENTICATION
+
+### Admin Login (`/api/v1/admin-auth`) - No Token Required
+```http
+POST /api/v1/admin-auth/login      # Admin login with username/password
+```
+
 ## 📱 MOBILE APP ENDPOINTS
 
-### Authentication (`/auth`) - No Token Required
+### Authentication (`/api/v1/auth`) - No Token Required
 ```http
-POST /auth/signup              # Register new user
-POST /auth/verify-email        # Verify email with OTP
-POST /auth/login              # Login and get JWT token
-POST /auth/forgot-password    # Send password reset OTP
-POST /auth/reset-password     # Reset password with OTP
+POST /api/v1/auth/signup              # Register new user
+POST /api/v1/auth/verify-email        # Verify email with OTP
+POST /api/v1/auth/login              # Login and get JWT token
+POST /api/v1/auth/forgot-password    # Send password reset OTP
+POST /api/v1/auth/reset-password     # Reset password with OTP
 ```
 
-### User Profile (`/users/profile`) - JWT Required
+### User Profile (`/api/v1/users/profile`) - JWT Required
 ```http
-GET /users/profile            # Get mobile-optimized user profile
+GET /api/v1/users/profile            # Get mobile-optimized user profile
 ```
 
-### VPN Management (`/vpn`) - JWT Required
+### VPN Management (`/api/v1/vpn`) - JWT Required
 ```http
-GET  /vpn/?location=us-east&is_premium=false    # Get available servers (filtered by user premium status)
-POST /vpn/connect?user_id=123                   # Connect to VPN server
-POST /vpn/disconnect?connection_id=uuid&user_id=123&bytes_sent=1048576&bytes_received=2097152  # Disconnect with stats
+GET  /api/v1/vpn/?location=us-east&is_premium=false    # Get available servers (filtered by user premium status)
+POST /api/v1/vpn/connect?user_id=123                   # Connect to VPN server
+POST /api/v1/vpn/disconnect?connection_id=uuid&user_id=123&bytes_sent=1048576&bytes_received=2097152  # Disconnect with stats
 ```
 
-### User Subscriptions (`/subscriptions/user/plans`) - JWT Required
+### User Subscriptions (`/api/v1/subscriptions/user/plans`) - JWT Required
 ```http
-GET /subscriptions/user/plans                   # Get current user's subscription history
+GET /api/v1/subscriptions/user/plans                   # Get current user's subscription history
 ```
 
-### Real-time Updates (`/websocket/connection`) - JWT Required
+### Real-time Updates (`/api/v1/websocket/connection`) - JWT Required
 ```http
-WS /websocket/connection?token=jwt_token        # Real-time connection status updates
+WS /api/v1/websocket/connection?token=jwt_token        # Real-time connection status updates
 ```
 
 ## 🔧 ADMIN BACKOFFICE ENDPOINTS
 
-### User Management (`/users`) - Admin JWT Required
+### VPN User Management (`/api/v1/users`) - Admin JWT Required
 ```http
-GET /users/?skip=0&limit=100&search=john       # List all users with pagination/search
-GET /users/by-id/{user_id}                     # Get specific user by ID
-PUT /users/status/{user_id}?is_active=true&is_premium=false&is_superuser=false  # Update user status
+GET /api/v1/users/?skip=0&limit=100&search=john       # List all VPN users with pagination/search
+GET /api/v1/users/by-id/{user_id}                     # Get specific VPN user by ID
+PUT /api/v1/users/status/{user_id}?is_active=true&is_premium=false&is_superuser=false  # Update VPN user status
 ```
 
-### Subscription Management (`/subscriptions`) - Admin JWT Required
+### Admin User Management (`/api/v1/admin`) - Admin JWT Required
 ```http
-GET  /subscriptions/plans                       # Get all subscription plans
-POST /subscriptions/plans?name=Premium&plan_type=monthly&price=9.99&duration_days=30&is_premium=true  # Create new plan
+GET  /api/v1/admin/admin-users?skip=0&limit=100       # List all admin users
+POST /api/v1/admin/create-admin-user                  # Create new admin user
+POST /api/v1/admin/create-vpn-user                    # Create new VPN user
 ```
 
-### VPN Server Management (`/vpn/servers`) - Admin JWT Required
+### Subscription Management (`/api/v1/subscriptions`) - Admin JWT Required
 ```http
-GET /vpn/servers?skip=0&limit=100              # Get all servers for admin management
+GET  /api/v1/subscriptions/plans                       # Get all subscription plans
+POST /api/v1/subscriptions/plans?name=Premium&plan_type=monthly&price=9.99&duration_days=30&is_premium=true  # Create new plan
 ```
 
-### Analytics (`/analytics`) - Admin/Premium JWT Required
+### VPN Server Management (`/api/v1/vpn/servers`) - Admin JWT Required
 ```http
-GET /analytics/usage/personal?days=30           # Personal usage analytics
-GET /analytics/servers/performance             # Server performance statistics
-GET /analytics/system/overview                 # System-wide overview metrics
-GET /analytics/locations/usage?days=30         # Usage statistics by location
+GET /api/v1/vpn/servers?skip=0&limit=100              # Get all servers for admin management
 ```
 
-### Health Monitoring (`/health`) - No Token Required
+### Analytics (`/api/v1/analytics`) - Admin/Premium JWT Required
 ```http
-GET /health/status                             # Comprehensive system health
-GET /health/metrics                            # System metrics and stats
-GET /health/ping                              # Simple health check
-GET /health/ready                             # Kubernetes readiness probe
-GET /health/live                              # Kubernetes liveness probe
+GET /api/v1/analytics/usage/personal?days=30           # Personal usage analytics
+GET /api/v1/analytics/servers/performance             # Server performance statistics
+GET /api/v1/analytics/system/overview                 # System-wide overview metrics
+GET /api/v1/analytics/locations/usage?days=30         # Usage statistics by location
 ```
 
-### Admin Dashboard (`/websocket/admin-dashboard`) - Admin JWT Required
+### Health Monitoring (`/api/v1/health`) - No Token Required
 ```http
-WS /websocket/admin-dashboard?token=jwt_token  # Real-time dashboard updates
+GET /api/v1/health/status                             # Comprehensive system health
+GET /api/v1/health/metrics                            # System metrics and stats
+GET /api/v1/health/ping                              # Simple health check
+GET /api/v1/health/ready                             # Kubernetes readiness probe
+GET /api/v1/health/live                              # Kubernetes liveness probe
+```
+
+### Admin Dashboard (`/api/v1/websocket/admin-dashboard`) - Admin JWT Required
+```http
+WS /api/v1/websocket/admin-dashboard?token=jwt_token  # Real-time dashboard updates
 ```
 
 ## 🔑 Authentication & Authorization
@@ -91,11 +105,34 @@ Authorization: Bearer <jwt_token>
 - **Mobile Users**: Access to own profile, connections, and subscriptions only
 - **Premium Users**: Additional access to personal analytics
 - **Admin Users**: Full access to all user management and system data
+  - **Super Admin**: Full system access, user management, server management
+  - **Admin**: User management, analytics, limited server access
+  - **Moderator**: Read-only access to users and analytics
+- **Rate Limiting**: Admin users are exempt from rate limiting
 
-### Token Generation Flow
+### Admin Authentication Flow
+```bash
+# Admin Login (Separate from Mobile Users)
+curl -X POST http://localhost:8000/api/v1/admin-auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "admin",
+    "password": "admin123"
+  }'
+
+# Response:
+{
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+  "admin_id": 1,
+  "role": "super_admin",
+  "full_name": "System Administrator"
+}
+```
+
+### Mobile User Authentication Flow
 ```bash
 # 1. Mobile User Registration
-curl -X POST http://localhost:8000/auth/signup \
+curl -X POST http://localhost:8000/api/v1/auth/signup \
   -H "Content-Type: application/json" \
   -d '{
     "name": "John Doe",
@@ -106,12 +143,12 @@ curl -X POST http://localhost:8000/auth/signup \
   }'
 
 # 2. Email Verification
-curl -X POST http://localhost:8000/auth/verify-email \
+curl -X POST http://localhost:8000/api/v1/auth/verify-email \
   -H "Content-Type: application/json" \
   -d '{"email": "john@example.com", "otp_code": "123456"}'
 
 # 3. Login to Get JWT Token
-curl -X POST http://localhost:8000/auth/login \
+curl -X POST http://localhost:8000/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email": "john@example.com", "password": "secure123"}'
 
@@ -173,6 +210,38 @@ curl -X POST http://localhost:8000/auth/login \
   "wg_config": "[Interface]\nPrivateKey = <client_private_key>\nAddress = 10.0.123.45/32\nDNS = 1.1.1.1, 1.0.0.1\n\n[Peer]\nPublicKey = <server_public_key>\nEndpoint = 203.0.113.1:51820\nAllowedIPs = 0.0.0.0/0\nPersistentKeepalive = 25",
   "started_at": "2024-01-15T10:30:00Z",
   "status": "connected"
+}
+```
+
+### Admin Login Response
+```json
+{
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+  "admin_id": 1,
+  "role": "super_admin",
+  "full_name": "System Administrator"
+}
+```
+
+### Create VPN User Request
+```json
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "password": "secure123",
+  "phone": "+1234567890",
+  "country": "US"
+}
+```
+
+### Create Admin User Request
+```json
+{
+  "username": "admin_john",
+  "email": "john.admin@company.com",
+  "password": "admin123",
+  "full_name": "John Admin",
+  "role": "admin"
 }
 ```
 
@@ -372,9 +441,9 @@ X-RateLimit-Reset: 1642248600
 ## 🔧 Development Notes
 
 ### API Versioning
-- All endpoints prefixed with role-based paths (`/auth`, `/users`, `/vpn`, etc.)
-- Clear separation between mobile and admin functionality
-- Future versions can add `/api/v2/` prefix if needed
+- All endpoints prefixed with `/api/v1/` for version control
+- Clear separation between mobile and admin functionality with role-based paths
+- Future versions will use `/api/v2/` prefix for backward compatibility
 
 ### Database Relations
 ```sql

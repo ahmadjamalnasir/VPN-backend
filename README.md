@@ -22,6 +22,7 @@ VPN-backend/
 ├── app/
 │   ├── api/v1/              # Role-based API endpoints
 │   │   ├── auth.py          # Mobile: Authentication & OTP
+│   │   ├── admin_auth.py    # Admin: Separate admin authentication
 │   │   ├── users.py         # Mobile: /profile | Admin: /list, /by-id, /status
 │   │   ├── subscriptions.py # Mobile: /user/plans | Admin: /plans
 │   │   ├── vpn.py          # Mobile: /connect, /disconnect | Admin: /servers
@@ -32,6 +33,7 @@ VPN-backend/
 │   │   └── websocket.py    # Mobile: /connection | Admin: /admin-dashboard
 │   ├── models/             # Database models
 │   │   ├── user.py         # User with readable ID & premium status
+│   │   ├── admin_user.py   # Separate admin users with role-based access
 │   │   ├── subscription_plan.py    # Independent subscription plans
 │   │   ├── user_subscription.py    # User-plan assignments
 │   │   ├── vpn_server.py          # VPN servers with premium flag
@@ -207,9 +209,14 @@ def generate_wireguard_keys():
 ```
 
 #### 7. Admin User Creation
-```sql
--- Create first admin user in database:
-UPDATE users SET is_superuser = true WHERE email = 'admin@yourdomain.com';
+```bash
+# Create separate admin user (recommended approach):
+python3 create_admin_user.py
+
+# Default admin credentials:
+# Username: admin
+# Password: admin123
+# Email: admin@primevpn.com
 ```
 
 ## 📚 Understanding the Application
@@ -217,8 +224,9 @@ UPDATE users SET is_superuser = true WHERE email = 'admin@yourdomain.com';
 ### Role-Based API Architecture (v2.0.0):
 1. **Mobile-First Design** → Optimized endpoints for mobile app integration
 2. **Admin Role Separation** → Secure admin-only endpoints with proper verification
-3. **JWT-Based Security** → Token validation with role checking on all protected routes
-4. **Real-time Features** → Separate WebSocket channels for mobile and admin
+3. **Separate User Systems** → VPN users and admin users in separate tables with dedicated creation endpoints
+4. **JWT-Based Security** → Token validation with role checking on all protected routes
+5. **Real-time Features** → Separate WebSocket channels for mobile and admin
 
 ### Core Flow:
 1. **Mobile User Registration** → Email verification → Login (JWT token)
@@ -230,7 +238,9 @@ UPDATE users SET is_superuser = true WHERE email = 'admin@yourdomain.com';
 
 #### Role-Based Authentication:
 - `auth.py` → Mobile authentication (signup, login, verify)
-- `users.py` → Mobile profile + Admin user management
+- `admin_auth.py` → Admin authentication (separate login system)
+- `users.py` → Mobile profile + VPN user management
+- `user_management.py` → Separate VPN user and admin user creation
 - JWT tokens with role verification on all protected endpoints
 
 #### Mobile-Optimized APIs:

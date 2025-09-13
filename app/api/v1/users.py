@@ -21,19 +21,11 @@ async def get_user_profile(
 ):
     """Get user profile for mobile app"""
     result = await db.execute(
-        select(User).options(selectinload(User.user_subscriptions))
-        .where(User.id == current_user_id)
+        select(User).where(User.id == current_user_id)
     )
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    # Get active subscription
-    active_subscription = None
-    for sub in user.user_subscriptions:
-        if sub.status == "active" and sub.is_active:
-            active_subscription = sub
-            break
     
     return UserProfileResponse(
         user_id=user.user_id,
@@ -43,8 +35,8 @@ async def get_user_profile(
         country=user.country,
         is_premium=user.is_premium,
         is_email_verified=user.is_email_verified,
-        subscription_status=active_subscription.status if active_subscription else "none",
-        subscription_expires=active_subscription.end_date if active_subscription else None,
+        subscription_status="none",
+        subscription_expires=None,
         created_at=user.created_at
     )
 
@@ -58,25 +50,32 @@ async def get_all_users(
     db: AsyncSession = Depends(get_db)
 ):
     """Get all users (Admin only)"""
-    # Verify admin access
-    admin_result = await db.execute(select(User).where(User.id == current_user_id))
-    admin_user = admin_result.scalar_one_or_none()
-    if not admin_user or not admin_user.is_superuser:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
-    query = select(User)
-    
-    if search:
-        query = query.where(
-            User.email.ilike(f"%{search}%") | 
-            User.name.ilike(f"%{search}%")
-        )
-    
-    query = query.offset(skip).limit(limit).order_by(User.created_at.desc())
-    result = await db.execute(query)
-    users = result.scalars().all()
-    
-    return users
+    try:
+        # Verify admin access from admin_users table
+        from app.models.admin_user import AdminUser
+        admin_result = await db.execute(select(AdminUser).where(AdminUser.id == current_user_id))
+        admin_user = admin_result.scalar_one_or_none()
+        if not admin_user:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        query = select(User)
+        
+        if search:
+            query = query.where(
+                User.email.ilike(f"%{search}%") | 
+                User.name.ilike(f"%{search}%")
+            )
+        
+        query = query.offset(skip).limit(limit).order_by(User.created_at.desc())
+        result = await db.execute(query)
+        users = result.scalars().all()
+        
+        return users
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in get_all_users: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.get("/by-id/{user_id}", response_model=UserResponse)
 async def get_user_by_id(

@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from app.core.config import get_settings
 from app.database import engine
-from app.api.v1 import auth, users, subscriptions, vpn, admin, mobile, analytics, health, websocket
+from app.api.v1 import auth, admin_auth, users, subscriptions, vpn, admin, mobile, analytics, health, websocket, user_management
 from app.middleware.ddos_protection import DDoSProtectionMiddleware, AdvancedRateLimitMiddleware
 from datetime import datetime
 import logging
@@ -60,20 +60,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ADMIN AUTHENTICATION (No Rate Limiting)
+app.include_router(admin_auth.router, prefix="/api/v1/admin-auth", tags=["Admin - Authentication"])
+
 # MOBILE APP ENDPOINTS
-app.include_router(auth.router, prefix="/auth", tags=["Mobile - Authentication"])
-app.include_router(users.router, prefix="/users", tags=["Mobile - Users"])
-app.include_router(subscriptions.router, prefix="/subscriptions", tags=["Mobile - Subscriptions"])
-app.include_router(vpn.router, prefix="/vpn", tags=["Mobile - VPN"])
-app.include_router(websocket.router, prefix="/websocket", tags=["Mobile - WebSocket"])
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["Mobile - Authentication"])
+app.include_router(users.router, prefix="/api/v1/users", tags=["Mobile - Users"])
+app.include_router(subscriptions.router, prefix="/api/v1/subscriptions", tags=["Mobile - Subscriptions"])
+app.include_router(vpn.router, prefix="/api/v1/vpn", tags=["Mobile - VPN"])
+app.include_router(websocket.router, prefix="/api/v1/websocket", tags=["Mobile - WebSocket"])
 
 # ADMIN BACKOFFICE ENDPOINTS
-app.include_router(admin.router, prefix="/admin", tags=["Admin - Management"])
-app.include_router(analytics.router, prefix="/analytics", tags=["Admin - Analytics"])
-app.include_router(health.router, prefix="/health", tags=["Admin - Health"])
+app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin - Management"])
+app.include_router(user_management.router, prefix="/api/v1/admin", tags=["Admin - User Management"])
+app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Admin - Analytics"])
+app.include_router(health.router, prefix="/api/v1/health", tags=["Admin - Health"])
 
 # LEGACY MOBILE ENDPOINTS (for compatibility)
-app.include_router(mobile.router, prefix="/mobile", tags=["Legacy Mobile"])
+app.include_router(mobile.router, prefix="/api/v1/mobile", tags=["Legacy Mobile"])
 
 @app.get("/")
 async def root():
@@ -86,20 +90,27 @@ async def root():
             "cors_enabled": True
         },
         "docs": "/docs",
+        "admin_authentication": {
+            "login": "/api/v1/admin-auth/login (No rate limiting)"
+        },
         "mobile_endpoints": {
-            "auth": "/auth",
-            "profile": "/users/profile",
-            "vpn": "/vpn",
-            "subscriptions": "/subscriptions/user/plans",
-            "websocket": "/websocket/connection"
+            "auth": "/api/v1/auth",
+            "profile": "/api/v1/users/profile",
+            "vpn": "/api/v1/vpn",
+            "subscriptions": "/api/v1/subscriptions/user/plans",
+            "websocket": "/api/v1/websocket/connection"
         },
         "admin_endpoints": {
-            "users": "/users (list), /users/by-id/{id}, /users/status/{id}",
-            "subscriptions": "/subscriptions/plans",
-            "analytics": "/analytics",
-            "vpn_servers": "/vpn/servers",
-            "health": "/health",
-            "websocket": "/websocket/admin-dashboard"
+            "vpn_users": "/api/v1/users (list), /api/v1/users/by-id/{id}, /api/v1/users/status/{id}",
+            "admin_users": "/api/v1/admin/admin-users (list)",
+            "create_vpn_user": "/api/v1/admin/create-vpn-user",
+            "create_admin_user": "/api/v1/admin/create-admin-user",
+            "subscriptions": "/api/v1/subscriptions/plans",
+            "analytics": "/api/v1/analytics",
+            "vpn_servers": "/api/v1/vpn/servers",
+            "health": "/api/v1/health",
+            "websocket": "/api/v1/websocket/admin-dashboard",
+            "rate_limits": "/api/v1/admin/rate-limits/config"
         }
     }
 

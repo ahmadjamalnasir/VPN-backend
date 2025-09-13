@@ -68,15 +68,15 @@ async def get_admin_dashboard(
         logger.error(f"Admin dashboard error: {safe_error}")
         raise HTTPException(status_code=500, detail="Dashboard data unavailable")
 
-@router.get("/users", response_model=List[AdminUserResponse])
-async def get_all_users(
+@router.get("/vpn-users", response_model=List[AdminUserResponse])
+async def get_all_vpn_users(
     skip: int = Query(0, ge=0, le=10000),
     limit: int = Query(100, ge=1, le=1000),
     search: str = Query(None, max_length=100),
     admin_user: User = Depends(verify_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get all users with pagination and search"""
+    """Get all VPN users (regular users, not admin users)"""
     try:
         query = select(User)
         
@@ -108,6 +108,89 @@ async def get_all_users(
         safe_error = sanitize_for_logging(str(e))
         logger.error(f"Admin users list error: {safe_error}")
         raise HTTPException(status_code=500, detail="Users data unavailable")
+
+@router.get("/admin-users")
+async def get_all_admin_users(
+    skip: int = Query(0, ge=0, le=10000),
+    limit: int = Query(100, ge=1, le=1000),
+    admin_user: User = Depends(verify_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all admin users (backoffice users)"""
+    try:
+        from app.models.admin_user import AdminUser
+        query = select(AdminUser).offset(skip).limit(limit).order_by(AdminUser.created_at.desc())
+        result = await db.execute(query)
+        admin_users = result.scalars().all()
+        
+        return [
+            {
+                "id": str(admin.id),
+                "admin_id": admin.admin_id,
+                "username": admin.username,
+                "email": admin.email,
+                "full_name": admin.full_name,
+                "role": admin.role.value,
+                "is_active": admin.is_active,
+                "last_login": admin.last_login,
+                "created_at": admin.created_at
+            }
+            for admin in admin_users
+        ]
+    except Exception as e:
+        safe_error = sanitize_for_logging(str(e))
+        logger.error(f"Admin users list error: {safe_error}")
+        raise HTTPException(status_code=500, detail="Admin users data unavailable")
+
+@router.post("/admin-users")
+async def create_admin_user(
+    username: str = Query(..., description="Admin username"),
+    email: str = Query(..., description="Admin email"),
+    password: str = Query(..., description="Admin password"),
+    full_name: str = Query(..., description="Admin full name"),
+    role: str = Query("admin", description="Admin role: super_admin, admin, moderator"),
+    admin_user: User = Depends(verify_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create new admin user"""
+    try:
+        from app.models.admin_user import AdminUser, AdminRole
+        from app.services.auth import get_password_hash
+        
+        # Validate role
+        if role not in ["super_admin", "admin", "moderator"]:
+            raise HTTPException(status_code=400, detail="Invalid role")
+        
+        # Check if username/email exists
+        existing = await db.execute(
+            select(AdminUser).where(
+                (AdminUser.username == username) | (AdminUser.email == email)
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Username or email already exists")
+        
+        # Create admin user
+        new_admin = AdminUser(
+            username=username,
+            email=email,
+            hashed_password=get_password_hash(password),
+            full_name=full_name,
+            role=AdminRole(role)
+        )
+        
+        db.add(new_admin)
+        await db.commit()
+        await db.refresh(new_admin)
+        
+        return {"message": "Admin user created successfully", "admin_id": new_admin.admin_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        safe_error = sanitize_for_logging(str(e))
+        logger.error(f"Admin user creation error: {safe_error}")
+        raise HTTPException(status_code=500, detail="Admin user creation failed")
 
 @router.put("/users/{user_id}/status")
 async def update_user_status(
@@ -303,3 +386,20 @@ async def delete_vpn_server(
         safe_error = sanitize_for_logging(str(e))
         logger.error(f"Server deletion error: {safe_error}")
         raise HTTPException(status_code=500, detail="Server deletion failed")
+
+@router.get("/rate-limits/config")
+async def get_rate_limit_config(
+    admin_user: User = Depends(verify_admin)
+):
+    """Get current rate limiting configuration"""
+    from app.core.config import get_settings
+    settings = get_settings()
+    
+    return {
+        "rate_limit_enabled": settings.RATE_LIMIT_ENABLED,
+        "ddos_protection_enabled": settings.DDOS_PROTECTION_ENABLED,
+        "rate_limits": settings.RATE_LIMITS,
+        "ddos_threshold": settings.DDOS_THRESHOLD,
+        "ddos_ban_duration": settings.DDOS_BAN_DURATION,
+        "ddos_whitelist_ips": settings.DDOS_WHITELIST_IPS
+    }

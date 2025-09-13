@@ -15,15 +15,22 @@ load_dotenv()
 # Import the SQLAlchemy models
 from app.database import Base
 from app.models.user import User
-from app.models.subscription import Subscription
+from app.models.subscription_plan import SubscriptionPlan
+from app.models.user_subscription import UserSubscription
 from app.models.vpn_server import VPNServer
+from app.models.connection import Connection
+from app.models.otp_verification import OTPVerification
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
 # Override sqlalchemy.url with the value from environment variable
-config.set_main_option("sqlalchemy.url", os.getenv("DATABASE_URL"))
+# Convert async URL to sync for Alembic
+db_url = os.getenv("DATABASE_URL")
+if db_url and "postgresql+asyncpg://" in db_url:
+    db_url = db_url.replace("postgresql+asyncpg://", "postgresql://")
+config.set_main_option("sqlalchemy.url", db_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

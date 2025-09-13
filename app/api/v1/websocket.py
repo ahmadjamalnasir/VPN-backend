@@ -1,11 +1,12 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from app.database import get_db
 from app.models.user import User
 from app.models.connection import Connection
+from app.models.vpn_server import VPNServer
 from app.services.auth import verify_token
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import asyncio
 from typing import Dict, Set
@@ -216,9 +217,6 @@ async def send_connection_status(user_id: str, db: AsyncSession):
 async def send_admin_dashboard_data(websocket: WebSocket, db: AsyncSession):
     """Send admin dashboard data (Admin only)"""
     try:
-        from sqlalchemy import func
-        from app.models.vpn_server import VPNServer
-        
         # Get dashboard statistics
         total_users = await db.scalar(select(func.count(User.id)))
         active_users = await db.scalar(select(func.count(User.id)).where(User.is_active == True))
@@ -252,8 +250,6 @@ async def send_admin_dashboard_data(websocket: WebSocket, db: AsyncSession):
 async def send_system_stats(websocket: WebSocket, db: AsyncSession):
     """Send system statistics (Admin only)"""
     try:
-        from sqlalchemy import func, text
-        
         # Connection stats (last 24 hours)
         yesterday = datetime.utcnow() - timedelta(days=1)
         daily_connections = await db.scalar(

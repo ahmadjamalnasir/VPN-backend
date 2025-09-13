@@ -20,16 +20,16 @@ A production-ready VPN backend API with comprehensive admin panel, mobile optimi
 ```
 VPN-backend/
 ├── app/
-│   ├── api/v1/              # Modern API endpoints (ACTIVE)
-│   │   ├── auth.py          # Authentication & OTP
-│   │   ├── users.py         # User management & connections
-│   │   ├── subscriptions.py # Subscription management
-│   │   ├── vpn.py          # VPN servers & connections
-│   │   ├── admin.py        # Admin dashboard & management
-│   │   ├── mobile.py       # Mobile-optimized endpoints
-│   │   ├── analytics.py    # Usage analytics & metrics
-│   │   ├── health.py       # System health monitoring
-│   │   └── websocket.py    # Real-time WebSocket APIs
+│   ├── api/v1/              # Role-based API endpoints
+│   │   ├── auth.py          # Mobile: Authentication & OTP
+│   │   ├── users.py         # Mobile: /profile | Admin: /list, /by-id, /status
+│   │   ├── subscriptions.py # Mobile: /user/plans | Admin: /plans
+│   │   ├── vpn.py          # Mobile: /connect, /disconnect | Admin: /servers
+│   │   ├── admin.py        # Admin: Dashboard & server management
+│   │   ├── mobile.py       # Legacy mobile endpoints
+│   │   ├── analytics.py    # Admin/Premium: Usage analytics & metrics
+│   │   ├── health.py       # Admin: System health monitoring
+│   │   └── websocket.py    # Mobile: /connection | Admin: /admin-dashboard
 │   ├── models/             # Database models
 │   │   ├── user.py         # User with readable ID & premium status
 │   │   ├── subscription_plan.py    # Independent subscription plans
@@ -50,7 +50,7 @@ VPN-backend/
 │   ├── middleware/         # Security middleware (DDoS, rate limiting)
 │   ├── utils/             # Security utilities & helpers
 │   ├── core/              # Configuration & settings
-│   └── main.py            # Application entry point
+│   └── main.py            # Application entry point with role-based routing
 ├── alembic/               # Database migrations
 ├── requirements.txt       # Python dependencies
 └── API_DOCUMENTATION.md   # Complete API reference
@@ -58,10 +58,10 @@ VPN-backend/
 
 
 ### **Impact of Removals:**
-- ✅ **No Functionality Lost** - All features migrated to modern system
-- ✅ **Improved Performance** - Single async system instead of mixed sync/async
-- ✅ **Better Security** - Consolidated auth with comprehensive validation
-- ✅ **Cleaner Code** - No duplicate imports or circular dependencies
+- ✅ **No Functionality Lost** - All features migrated to role-based system
+- ✅ **Improved Security** - Proper role checking on all endpoints
+- ✅ **Better Performance** - Single async system with optimized queries
+- ✅ **Cleaner Architecture** - Clear separation between mobile and admin APIs
 
 ## 🔧 Step-by-Step Setup Guide
 
@@ -184,7 +184,7 @@ STRIPE_PUBLISHABLE_KEY="pk_live_actual_publishable_key"
 # CHANGE THIS:
 ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "https://yourdomain.com"]
 # TO: Your actual domains
-ALLOWED_ORIGINS: List[str] = ["https://your-frontend.com", "https://admin.your-domain.com"]
+ALLOWED_ORIGINS: List[str] = ["https://your-mobile-app.com", "https://admin.your-domain.com"]
 ```
 
 #### 5. Email Service (`app/services/otp_service.py`)
@@ -214,34 +214,34 @@ UPDATE users SET is_superuser = true WHERE email = 'admin@yourdomain.com';
 
 ## 📚 Understanding the Application
 
-### Modern API Architecture (v2.0.0):
-1. **Single Auth System** → JWT-based authentication across all endpoints
-2. **Async-First** → All database operations use async SQLAlchemy
-3. **Comprehensive Security** → Input validation, rate limiting, DDoS protection
-4. **Real-time Features** → WebSocket support for live updates
+### Role-Based API Architecture (v2.0.0):
+1. **Mobile-First Design** → Optimized endpoints for mobile app integration
+2. **Admin Role Separation** → Secure admin-only endpoints with proper verification
+3. **JWT-Based Security** → Token validation with role checking on all protected routes
+4. **Real-time Features** → Separate WebSocket channels for mobile and admin
 
 ### Core Flow:
-1. **User Registration** → Email verification → Login (JWT token)
-2. **Subscription Assignment** → Premium status update
-3. **VPN Connection** → Server selection → WireGuard config
-4. **Session Tracking** → Usage analytics → Billing data
+1. **Mobile User Registration** → Email verification → Login (JWT token)
+2. **Admin User Management** → Create/update users, assign subscriptions
+3. **VPN Connection Flow** → Mobile connects → Real-time status → Admin monitoring
+4. **Analytics & Monitoring** → Usage tracking → Admin dashboard → System alerts
 
 ### Key Components:
 
-#### Authentication System (`app/services/auth.py`):
-- JWT token generation and verification
-- Password hashing with bcrypt
-- Token-based route protection
+#### Role-Based Authentication:
+- `auth.py` → Mobile authentication (signup, login, verify)
+- `users.py` → Mobile profile + Admin user management
+- JWT tokens with role verification on all protected endpoints
 
-#### Security Layer:
-- `middleware/ddos_protection.py` → IP banning & request tracking
-- `utils/security.py` → Input validation & sanitization
-- `services/rate_limit_service.py` → Advanced rate limiting
+#### Mobile-Optimized APIs:
+- Minimal response payloads for mobile networks
+- Premium status filtering for server lists
+- Real-time connection status via WebSocket
 
-#### VPN Management:
-- `models/vpn_server.py` → Server definitions with premium flags
-- `models/connection.py` → Session tracking with detailed stats
-- `api/v1/vpn.py` → Connect/disconnect with WireGuard integration
+#### Admin Management APIs:
+- Comprehensive user management with search/pagination
+- System analytics and performance monitoring
+- Real-time dashboard updates via WebSocket
 
 ## 🚀 Production Deployment Checklist
 
@@ -250,21 +250,22 @@ UPDATE users SET is_superuser = true WHERE email = 'admin@yourdomain.com';
 - [ ] Set up Redis cluster
 - [ ] Update Stripe live keys
 - [ ] Implement email service
-- [ ] Configure CORS origins
+- [ ] Configure CORS origins for mobile app and admin panel
 - [ ] Set up SSL certificates
 - [ ] Create admin user
-- [ ] Configure monitoring
+- [ ] Configure monitoring and alerts
 - [ ] Set up backup strategy
 - [ ] Replace WireGuard key placeholders
-- [ ] Test all API endpoints
+- [ ] Test mobile app integration
+- [ ] Test admin panel integration
 
 ## 📖 API Documentation
 
-Complete API reference available at: [API_DOCUMENTATION.md](API_DOCUMENTATION.md)
+Complete API reference with mobile and admin endpoints: [API_DOCUMENTATION.md](API_DOCUMENTATION.md)
 
 ## 🔒 Security
 
-Security implementation details: [SECURITY.md](SECURITY.md)
+Security implementation with role-based access control: [SECURITY.md](SECURITY.md)
 
 ## 📝 License
 

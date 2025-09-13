@@ -1,174 +1,164 @@
 # Prime VPN API Documentation v2.0.0
 
-## 🔌 Complete API Endpoints
+## 🎯 Role-Based API Architecture
 
-### Authentication (`/api/v1/auth`) - No Token Required
+The API is designed with clear separation between **Mobile App** and **Admin Backoffice** endpoints, each with appropriate role-based access control.
+
+## 📱 MOBILE APP ENDPOINTS
+
+### Authentication (`/auth`) - No Token Required
 ```http
-POST /signup              # Register user with name, email, password, phone, country
-POST /verify-email        # Verify email with OTP code
-POST /login              # Login and get JWT token
-POST /forgot-password    # Send password reset OTP
-POST /reset-password     # Reset password with OTP verification
+POST /auth/signup              # Register new user
+POST /auth/verify-email        # Verify email with OTP
+POST /auth/login              # Login and get JWT token
+POST /auth/forgot-password    # Send password reset OTP
+POST /auth/reset-password     # Reset password with OTP
 ```
 
-### Users (`/api/v1/users`) - Requires JWT Token
+### User Profile (`/users/profile`) - JWT Required
 ```http
-GET  /connections?user_id=123&limit=50     # Connection history (Premium only)
-PUT  /update?user_id=123                   # Update name, phone, country, password
+GET /users/profile            # Get mobile-optimized user profile
 ```
 
-### Subscriptions (`/api/v1/subscriptions`) - Requires JWT Token
+### VPN Management (`/vpn`) - JWT Required
 ```http
-POST /plans/create?name=Premium&plan_type=monthly&price=9.99&duration_days=30&is_premium=true  # Create plan (Admin)
-GET  /plans                                # List all plans (Public)
-GET  /users/{user_id}                      # User subscription history
-POST /assign?user_id=123&plan_id=2&auto_renew=true&payment_method=stripe  # Assign plan to user
-PUT  /cancel/{user_id}                     # Cancel subscription
+GET  /vpn/?location=us-east&is_premium=false    # Get available servers (filtered by user premium status)
+POST /vpn/connect?user_id=123                   # Connect to VPN server
+POST /vpn/disconnect?connection_id=uuid&user_id=123&bytes_sent=1048576&bytes_received=2097152  # Disconnect with stats
 ```
 
-### VPN (`/api/v1/vpn`) - Requires JWT Token
+### User Subscriptions (`/subscriptions/user/plans`) - JWT Required
 ```http
-GET  /servers?is_premium=true&location=us-east  # Get VPN servers (Public)
-POST /connect?user_id=123                       # Connect with profile validation
-POST /disconnect?connection_id=uuid&user_id=123&bytes_sent=1048576&bytes_received=2097152  # Disconnect with stats
+GET /subscriptions/user/plans                   # Get current user's subscription history
 ```
 
-### Admin (`/api/v1/admin`) - Requires Admin JWT Token
+### Real-time Updates (`/websocket/connection`) - JWT Required
 ```http
-GET  /dashboard                           # Admin dashboard statistics
-GET  /users?skip=0&limit=100&search=john # All users with pagination/search
-PUT  /users/{user_id}/status             # Update user status (active/premium/superuser)
-POST /servers                            # Create VPN server
-PUT  /servers/{server_id}                # Update server configuration
-DELETE /servers/{server_id}              # Delete server (if no active connections)
+WS /websocket/connection?token=jwt_token        # Real-time connection status updates
 ```
 
-### Mobile (`/api/v1/mobile`) - Requires JWT Token
+## 🔧 ADMIN BACKOFFICE ENDPOINTS
+
+### User Management (`/users`) - Admin JWT Required
 ```http
-GET  /profile                            # Mobile-optimized user profile
-GET  /servers/quick                      # Quick server list with flags & load
-POST /connect/quick                      # Quick connect for mobile apps
-POST /disconnect?connection_id=uuid      # Mobile disconnect
-GET  /status                            # Current connection status
+GET /users/?skip=0&limit=100&search=john       # List all users with pagination/search
+GET /users/by-id/{user_id}                     # Get specific user by ID
+PUT /users/status/{user_id}?is_active=true&is_premium=false&is_superuser=false  # Update user status
 ```
 
-### Analytics (`/api/v1/analytics`) - Requires Premium/Admin JWT Token
+### Subscription Management (`/subscriptions`) - Admin JWT Required
 ```http
-GET  /usage/personal?days=30             # Personal usage analytics
-GET  /servers/performance                # Server performance statistics
-GET  /system/overview                    # System-wide overview metrics
-GET  /locations/usage?days=30            # Usage statistics by location
+GET  /subscriptions/plans                       # Get all subscription plans
+POST /subscriptions/plans?name=Premium&plan_type=monthly&price=9.99&duration_days=30&is_premium=true  # Create new plan
 ```
 
-### Health (`/health`) - No Token Required
+### VPN Server Management (`/vpn/servers`) - Admin JWT Required
 ```http
-GET  /status                            # Comprehensive health check with DB/Redis/System
-GET  /metrics                           # System metrics and connection stats
-GET  /ping                             # Simple ping for load balancers
-GET  /ready                            # Readiness probe for Kubernetes
-GET  /live                             # Liveness probe for Kubernetes
+GET /vpn/servers?skip=0&limit=100              # Get all servers for admin management
 ```
 
-### WebSocket (`/ws`) - Requires JWT Token as Query Parameter
+### Analytics (`/analytics`) - Admin/Premium JWT Required
 ```http
-WS   /connection-status?token=jwt_token  # Real-time connection status updates
-WS   /system-alerts?token=jwt_token     # System alerts (Admin only)
+GET /analytics/usage/personal?days=30           # Personal usage analytics
+GET /analytics/servers/performance             # Server performance statistics
+GET /analytics/system/overview                 # System-wide overview metrics
+GET /analytics/locations/usage?days=30         # Usage statistics by location
 ```
 
-## 🔑 Authentication System (v2.0.0)
+### Health Monitoring (`/health`) - No Token Required
+```http
+GET /health/status                             # Comprehensive system health
+GET /health/metrics                            # System metrics and stats
+GET /health/ping                              # Simple health check
+GET /health/ready                             # Kubernetes readiness probe
+GET /health/live                              # Kubernetes liveness probe
+```
+
+### Admin Dashboard (`/websocket/admin-dashboard`) - Admin JWT Required
+```http
+WS /websocket/admin-dashboard?token=jwt_token  # Real-time dashboard updates
+```
+
+## 🔑 Authentication & Authorization
 
 ### JWT Token Authentication
-All endpoints except `/auth` and `/health` require JWT token in Authorization header:
+All protected endpoints require JWT token in Authorization header:
 ```http
 Authorization: Bearer <jwt_token>
 ```
 
-### Token Generation
+### Role-Based Access Control
+- **Mobile Users**: Access to own profile, connections, and subscriptions only
+- **Premium Users**: Additional access to personal analytics
+- **Admin Users**: Full access to all user management and system data
+
+### Token Generation Flow
 ```bash
-# Login to get token
-curl -X POST http://localhost:8000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"password123"}'
-
-# Response:
-{
-  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-  "user_id": 123,
-  "is_premium": true
-}
-```
-
-### Token Usage
-```bash
-# Use token in subsequent requests
-curl -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
-  http://localhost:8000/api/v1/users/connections?user_id=123
-```
-
-## 📊 API Response Examples
-
-### User Registration Flow
-```bash
-# 1. Register
-curl -X POST http://localhost:8000/api/v1/auth/signup \
+# 1. Mobile User Registration
+curl -X POST http://localhost:8000/auth/signup \
   -H "Content-Type: application/json" \
   -d '{
     "name": "John Doe",
-    "email": "john@example.com", 
+    "email": "john@example.com",
     "password": "secure123",
     "phone": "+1234567890",
     "country": "US"
   }'
 
-# Response:
-{
-  "id": "uuid",
-  "user_id": 123,
-  "name": "John Doe",
-  "email": "john@example.com",
-  "is_premium": false,
-  "is_email_verified": false,
-  "created_at": "2024-01-15T10:30:00Z"
-}
-
-# 2. Verify Email
-curl -X POST http://localhost:8000/api/v1/auth/verify-email \
+# 2. Email Verification
+curl -X POST http://localhost:8000/auth/verify-email \
   -H "Content-Type: application/json" \
   -d '{"email": "john@example.com", "otp_code": "123456"}'
 
-# 3. Login
-curl -X POST http://localhost:8000/api/v1/auth/login \
+# 3. Login to Get JWT Token
+curl -X POST http://localhost:8000/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email": "john@example.com", "password": "secure123"}'
-```
 
-### Mobile Server List
-```json
+# Response:
 {
-  "servers": [
-    {
-      "id": "uuid",
-      "name": "US-EAST - Server 1",
-      "location": "us-east",
-      "ping": 15,
-      "load_percentage": 25,
-      "is_premium": false,
-      "flag_emoji": "🇺🇸"
-    },
-    {
-      "id": "uuid",
-      "name": "EU-WEST - Server 2", 
-      "location": "eu-west",
-      "ping": 45,
-      "load_percentage": 60,
-      "is_premium": true,
-      "flag_emoji": "🇪🇺"
-    }
-  ]
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+  "user_id": 123,
+  "is_premium": false
 }
 ```
 
-### VPN Connection Response
+## 📊 API Response Examples
+
+### Mobile User Profile
+```json
+{
+  "user_id": 123,
+  "name": "John Doe",
+  "email": "john@example.com",
+  "phone": "+1234567890",
+  "country": "US",
+  "is_premium": false,
+  "is_email_verified": true,
+  "subscription_status": "none",
+  "subscription_expires": null,
+  "created_at": "2024-01-15T10:30:00Z"
+}
+```
+
+### Mobile VPN Server List
+```json
+[
+  {
+    "id": "uuid",
+    "hostname": "vpn-us-east-1",
+    "location": "us-east",
+    "ip_address": "203.0.113.1",
+    "status": "active",
+    "current_load": 0.25,
+    "ping": 15,
+    "is_premium": false,
+    "created_at": "2024-01-15T10:30:00Z"
+  }
+]
+```
+
+### Mobile VPN Connection Response
 ```json
 {
   "connection_id": "uuid",
@@ -180,44 +170,50 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
     "is_premium": false
   },
   "client_ip": "10.0.123.45",
-  "wg_config": "[Interface]\nPrivateKey = <client_private_key>\nAddress = 10.0.123.45/32\n...",
+  "wg_config": "[Interface]\nPrivateKey = <client_private_key>\nAddress = 10.0.123.45/32\nDNS = 1.1.1.1, 1.0.0.1\n\n[Peer]\nPublicKey = <server_public_key>\nEndpoint = 203.0.113.1:51820\nAllowedIPs = 0.0.0.0/0\nPersistentKeepalive = 25",
   "started_at": "2024-01-15T10:30:00Z",
   "status": "connected"
 }
 ```
 
-### Analytics Response
+### Admin User List
+```json
+[
+  {
+    "id": "uuid",
+    "user_id": 123,
+    "name": "John Doe",
+    "email": "john@example.com",
+    "phone": "+1234567890",
+    "country": "US",
+    "is_active": true,
+    "is_premium": false,
+    "is_superuser": false,
+    "is_email_verified": true,
+    "created_at": "2024-01-15T10:30:00Z"
+  }
+]
+```
+
+### Admin Analytics Response
 ```json
 {
   "period_days": 30,
-  "total_connections": 150,
-  "total_data_gb": 25.5,
-  "total_duration_hours": 48.2,
+  "total_connections": 1250,
+  "total_data_gb": 450.5,
+  "total_duration_hours": 2840.2,
   "daily_usage": [
     {
       "date": "2024-01-15",
-      "connections": 5,
-      "data_mb": 850.2,
-      "duration_minutes": 120.5
+      "connections": 45,
+      "data_mb": 15420.8,
+      "duration_minutes": 3680.5
     }
   ]
 }
 ```
 
-### Admin Dashboard Response
-```json
-{
-  "total_users": 1250,
-  "active_users": 1100,
-  "premium_users": 450,
-  "total_servers": 25,
-  "active_servers": 23,
-  "active_connections": 89,
-  "daily_connections": 1450
-}
-```
-
-### Health Status Response
+### System Health Response
 ```json
 {
   "status": "healthy",
@@ -227,7 +223,7 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
     "response_time_ms": 12.5
   },
   "redis": {
-    "status": "healthy", 
+    "status": "healthy",
     "response_time_ms": 3.2
   },
   "servers": {
@@ -242,7 +238,9 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
 }
 ```
 
-### WebSocket Messages
+## 🔌 WebSocket Messages
+
+### Mobile Connection Status
 ```json
 // Connection Status Update
 {
@@ -257,7 +255,36 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
   }
 }
 
-// System Alert (Admin)
+// Connection Change Notification
+{
+  "type": "connection_change",
+  "status": "disconnected",
+  "data": {
+    "duration_seconds": 3600,
+    "bytes_sent": 1048576,
+    "bytes_received": 2097152
+  },
+  "timestamp": "2024-01-15T14:30:00Z"
+}
+```
+
+### Admin Dashboard Updates
+```json
+// Dashboard Statistics Update
+{
+  "type": "dashboard_update",
+  "data": {
+    "total_users": 1250,
+    "active_users": 1100,
+    "premium_users": 450,
+    "total_servers": 25,
+    "active_servers": 23,
+    "active_connections": 89,
+    "timestamp": "2024-01-15T10:30:00Z"
+  }
+}
+
+// System Alert
 {
   "type": "system_alert",
   "alert_type": "server_overload",
@@ -269,14 +296,22 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
 
 ## 🔒 Security Features
 
-### Input Validation
-- Email format validation
-- IP address validation  
-- Suspicious pattern detection
-- SQL injection prevention
-- XSS protection
+### Input Validation & Role Checking
+```python
+# Example: Admin endpoint with role verification
+@router.get("/users/")
+async def get_all_users(
+    current_user_id: str = Depends(verify_token),
+    db: AsyncSession = Depends(get_db)
+):
+    # Verify admin access
+    admin_result = await db.execute(select(User).where(User.id == current_user_id))
+    admin_user = admin_result.scalar_one_or_none()
+    if not admin_user or not admin_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Admin access required")
+```
 
-### Rate Limiting
+### Rate Limiting Headers
 ```http
 # Rate limit headers in responses
 X-RateLimit-Limit: 30
@@ -286,6 +321,16 @@ X-RateLimit-Reset: 1642248600
 
 ### Error Responses
 ```json
+// Authentication Error
+{
+  "detail": "Invalid token"
+}
+
+// Authorization Error
+{
+  "detail": "Admin access required"
+}
+
 // Rate Limited
 {
   "error": "RATE_LIMIT_EXCEEDED",
@@ -296,58 +341,58 @@ X-RateLimit-Reset: 1642248600
 
 // DDoS Protection
 {
-  "error": "IP_BANNED", 
+  "error": "IP_BANNED",
   "message": "Your IP has been temporarily banned due to suspicious activity",
   "retry_after": 300
 }
-
-// Authentication Error
-{
-  "detail": "Invalid token"
-}
 ```
 
-## 🎯 Integration Ready Features
+## 🎯 Integration Guidelines
 
-### Backoffice Integration
-- Complete admin dashboard with real-time stats
-- User management with search and pagination
-- Server management (CRUD operations)
-- System health monitoring
-- Analytics and reporting
+### Mobile App Integration
+1. **Authentication Flow**: Implement signup → verify email → login → store JWT token
+2. **Profile Management**: Use `/users/profile` for user info with subscription status
+3. **VPN Connection**: Use `/vpn/connect` and `/vpn/disconnect` with real-time status via WebSocket
+4. **Server Selection**: Filter servers by location and premium status automatically
+5. **Error Handling**: Handle 403 errors for premium features gracefully
 
-### Mobile App Integration  
-- Optimized endpoints for mobile UI
-- Quick connect functionality
-- Real-time connection status via WebSocket
-- Flag emojis for server locations
-- Minimal data transfer for mobile networks
+### Admin Panel Integration
+1. **Dashboard**: Use WebSocket `/websocket/admin-dashboard` for real-time updates
+2. **User Management**: Implement search, pagination, and status updates
+3. **Analytics**: Display usage patterns and system performance metrics
+4. **Server Management**: Monitor server health and manage configurations
+5. **Role Verification**: Always verify admin status before showing admin features
 
-### Production Features
-- Comprehensive health checks for load balancers
-- DDoS protection with IP banning
-- Advanced rate limiting per endpoint
-- System metrics and monitoring
-- Real-time WebSocket updates
-- Async-first architecture for high performance
+### Database Alignment
+- All APIs use proper foreign key relationships (UUIDs for internal, integers for external)
+- User subscriptions correctly link `user.id` (UUID) to `plan.id` (UUID)
+- Connection tracking properly references `user.id` and `server.id` (UUIDs)
+- Readable IDs (`user_id`, `plan_id`) used in API endpoints for external references
 
 ## 🔧 Development Notes
 
 ### API Versioning
-- All endpoints prefixed with `/api/v1/`
-- Future versions will use `/api/v2/`, etc.
+- All endpoints prefixed with role-based paths (`/auth`, `/users`, `/vpn`, etc.)
+- Clear separation between mobile and admin functionality
+- Future versions can add `/api/v2/` prefix if needed
 
 ### Database Relations
-- Users ↔ UserSubscriptions ↔ SubscriptionPlans
-- Users ↔ Connections ↔ VPNServers
-- Proper foreign key constraints with CASCADE/SET NULL
+```sql
+-- Verified Foreign Key Relationships:
+users.id (UUID) ← user_subscriptions.user_id (UUID)
+subscription_plans.id (UUID) ← user_subscriptions.plan_id (UUID)
+users.id (UUID) ← connections.user_id (UUID)
+vpn_servers.id (UUID) ← connections.server_id (UUID)
 
-### Authentication Flow
-- JWT tokens contain `user_id` and `sub` (email)
-- Tokens expire after 30 minutes (configurable)
-- All protected routes verify token and extract user_id
+-- Readable ID Usage:
+User.user_id (int) - Used in mobile/admin API endpoints
+SubscriptionPlan.plan_id (int) - Used in admin API endpoints
+```
 
-### Error Handling
-- Consistent error response format
-- Proper HTTP status codes
-- Security-conscious error messages (no information leakage)
+### Performance Optimizations
+- Mobile endpoints return minimal data payloads
+- Admin endpoints support pagination and search
+- WebSocket connections separated by role (mobile vs admin)
+- Database queries optimized with proper indexing on foreign keys
+
+The API is now fully aligned with database structure and ready for production mobile and admin integrations.

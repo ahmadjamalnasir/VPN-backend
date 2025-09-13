@@ -260,7 +260,12 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
 
 ### Add VPN Server Request
 ```bash
-POST /api/v1/admin/add_server?hostname=vpn-us-east-1&location=us-east&ip_address=203.0.113.1&endpoint=203.0.113.1:51820&public_key=server_public_key&available_ips=10.0.0.0/24&is_premium=false&status=active
+POST /api/v1/admin/add_server?hostname=test-server-1&location=United+States&endpoint=23.123.12.12:51820&public_key=SERVER_PUBLIC_KEY_HERE&tunnel_ip=10.221.12.11/32&allowed_ips=0.0.0.0/0&is_premium=false&status=active&max_connections=10
+```
+
+### Update VPN Server Request
+```bash
+PUT /api/v1/admin/servers/{server_id}?hostname=updated-server&location=Canada&endpoint=new.endpoint.com:51820&public_key=NEW_PUBLIC_KEY&tunnel_ip=10.0.0.1/32&allowed_ips=0.0.0.0/0&is_premium=true&status=active&max_connections=50
 ```
 
 ### Server List Response

@@ -294,6 +294,34 @@ python3 create_admin_user.py
 
 Complete API reference with mobile and admin endpoints: [API_DOCUMENTATION.md](API_DOCUMENTATION.md)
 
+## 🔧 WireGuard Server Configuration
+
+### Minimum WireGuard Server Details Required
+
+The client needs these essential details for VPN connection:
+
+- **`public_key`** → The server's WireGuard public key (must be a real base64-like key, not "usa.org")
+- **`endpoint`** → The server's reachable IP (or hostname) and port (e.g., 23.123.12.12:51820)
+- **`allowed_ips`** → What traffic should go through this peer (usually 0.0.0.0/0 for all traffic)
+- **`client_ip`** (or available_ips assigned per client) → The IP inside the tunnel (10.x.x.x/32)
+
+### Server Parameters
+
+**Create Server** (`POST /api/v1/admin/add_server`):
+- `hostname` - Server hostname
+- `location` - Server location
+- `endpoint` - Server endpoint (IP:port)
+- `public_key` - Server WireGuard public key
+- `tunnel_ip` - Tunnel IP with CIDR (e.g., 10.221.12.11/32)
+- `allowed_ips` - Allowed IPs (default: 0.0.0.0/0)
+- `is_premium` - Premium flag (true/false)
+- `status` - Server status (active/inactive/maintenance)
+- `max_connections` - Maximum connections (integer > 0)
+
+**Update Server** (`PUT /api/v1/admin/servers/{server_id}`):
+- All above parameters can be updated
+- `current_load` - Only shown in server listing (not editable)
+
 ## 🔒 Security
 
 Security implementation with role-based access control: [SECURITY.md](SECURITY.md)

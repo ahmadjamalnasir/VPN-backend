@@ -276,13 +276,14 @@ async def get_all_servers(
                 "id": str(server.id),
                 "hostname": server.hostname,
                 "location": server.location,
-                "ip_address": server.ip_address,
                 "endpoint": server.endpoint,
                 "public_key": server.public_key,
-                "available_ips": server.available_ips,
+                "tunnel_ip": server.tunnel_ip,
+                "allowed_ips": server.allowed_ip,
                 "is_premium": server.is_premium,
                 "status": server.status,
                 "current_load": server.current_load,
+                "max_connections": server.max_connections,
                 "created_at": server.created_at.isoformat() if server.created_at else None
             }
             for server in servers
@@ -296,38 +297,42 @@ async def get_all_servers(
 async def add_vpn_server(
     hostname: str = Query(..., description="Server hostname"),
     location: str = Query(..., description="Server location"),
-    ip_address: str = Query(..., description="Server IP address"),
     endpoint: str = Query(..., description="Server endpoint"),
     public_key: str = Query(..., description="Server public key"),
-    available_ips: str = Query(..., description="Available IP range"),
+    tunnel_ip: str = Query(..., description="Tunnel IP address"),
+    allowed_ips: str = Query("0.0.0.0/0", description="Allowed IPs"),
     is_premium: bool = Query(False, description="Premium server flag"),
     status: str = Query("active", description="Server status"),
-    max_connection: int = Query(100, description="Maximum connections allowed"),
+    max_connections: int = Query(100, description="Maximum connections allowed"),
     admin_user = Depends(verify_super_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """Add new VPN server"""
     try:
-        # Security validation
-        if not validate_user_input(hostname, max_length=100, allowed_chars="a-zA-Z0-9.-"):
-            raise HTTPException(status_code=400, detail="Invalid hostname format")
+        # Basic validation
+        if len(hostname) > 100:
+            raise HTTPException(status_code=400, detail="Hostname too long")
         
-        if not validate_ip_address(ip_address):
-            raise HTTPException(status_code=400, detail="Invalid IP address")
+        if len(location) > 100:
+            raise HTTPException(status_code=400, detail="Location too long")
         
         if status not in ["active", "inactive", "maintenance"]:
             raise HTTPException(status_code=400, detail="Invalid status. Must be: active, inactive, maintenance")
         
+        if max_connection <= 0:
+            raise HTTPException(status_code=400, detail="Max connection must be greater than 0")
+        
         server = VPNServer(
             hostname=hostname,
             location=location,
-            ip_address=ip_address,
+            ip_address=endpoint.split(':')[0],
             endpoint=endpoint,
             public_key=public_key,
-            available_ips=available_ips,
+            tunnel_ip=tunnel_ip,
+            allowed_ip=allowed_ips,
             is_premium=is_premium,
             status=status,
-            max_connections=max_connection
+            max_connections=max_connections
         )
         db.add(server)
         await db.commit()
@@ -346,17 +351,24 @@ async def add_vpn_server(
         raise
     except Exception as e:
         await db.rollback()
-        safe_error = sanitize_for_logging(str(e))
-        logger.error(f"Server creation error: {safe_error}")
-        raise HTTPException(status_code=500, detail="Server creation failed")
+        error_msg = str(e)
+        print(f"Server creation error: {error_msg}")
+        logger.error(f"Server creation error: {error_msg}")
+        raise HTTPException(status_code=500, detail=f"Server creation failed: {error_msg}")
 
 @router.put("/servers/{server_id}")
 async def update_vpn_server(
     server_id: str,
-    status: str = Query(None, description="Server status: Active, Inactive, Maintenance"),
+    hostname: str = Query(None, description="Server hostname"),
+    location: str = Query(None, description="Server location"),
+    endpoint: str = Query(None, description="Server endpoint"),
+    public_key: str = Query(None, description="Server public key"),
+    tunnel_ip: str = Query(None, description="Tunnel IP address"),
+    allowed_ips: str = Query(None, description="Allowed IPs"),
     is_premium: bool = Query(None, description="Premium server flag"),
-    max_load: float = Query(None, description="Maximum server load (0.0-1.0)"),
-    max_connection: int = Query(None, description="Maximum connections allowed"),
+    status: str = Query(None, description="Server status: Active, Inactive, Maintenance"),
+    current_load: float = Query(None, description="Current server load (0.0-1.0)"),
+    max_connections: int = Query(None, description="Maximum connections allowed"),
     admin_user = Depends(verify_super_admin),
     db: AsyncSession = Depends(get_db)
 ):
@@ -374,27 +386,38 @@ async def update_vpn_server(
         if not server:
             raise HTTPException(status_code=404, detail="Server not found")
         
-        # Validate and update status
+        # Update all server fields
+        if hostname is not None:
+            server.hostname = hostname
+        
+        if location is not None:
+            server.location = location
+        
+        if endpoint is not None:
+            server.endpoint = endpoint
+            server.ip_address = endpoint.split(':')[0]
+        
+        if public_key is not None:
+            server.public_key = public_key
+        
+        if tunnel_ip is not None:
+            server.tunnel_ip = tunnel_ip
+        
+        if allowed_ips is not None:
+            server.allowed_ip = allowed_ips
+        
+        if is_premium is not None:
+            server.is_premium = is_premium
+        
         if status is not None:
             if status.lower() not in ["active", "inactive", "maintenance"]:
                 raise HTTPException(status_code=400, detail="Invalid status. Must be: Active, Inactive, Maintenance")
             server.status = status.lower()
         
-        # Update premium flag
-        if is_premium is not None:
-            server.is_premium = is_premium
-        
-        # Validate and update max load
-        if max_load is not None:
-            if not (0.0 <= max_load <= 1.0):
-                raise HTTPException(status_code=400, detail="Max load must be between 0.0 and 1.0")
-            server.current_load = max_load
-        
-        # Validate and update max connections
-        if max_connection is not None:
-            if max_connection <= 0:
+        if max_connections is not None:
+            if max_connections <= 0:
                 raise HTTPException(status_code=400, detail="Max connections must be greater than 0")
-            server.max_connections = max_connection
+            server.max_connections = max_connections
         
         await db.commit()
         
@@ -405,10 +428,14 @@ async def update_vpn_server(
             "message": "Server updated successfully",
             "server_id": str(server.id),
             "hostname": server.hostname,
-            "status": server.status,
+            "location": server.location,
+            "endpoint": server.endpoint,
+            "public_key": server.public_key,
+            "tunnel_ip": server.ip_address,
+            "allowed_ips": server.available_ips,
             "is_premium": server.is_premium,
-            "max_load": server.current_load,
-            "max_connection": server.max_connections
+            "status": server.status,
+            "max_connections": server.max_connections
         }
     except HTTPException:
         raise

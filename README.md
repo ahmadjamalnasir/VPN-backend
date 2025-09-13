@@ -301,26 +301,41 @@ Complete API reference with mobile and admin endpoints: [API_DOCUMENTATION.md](A
 The client needs these essential details for VPN connection:
 
 - **`public_key`** → The server's WireGuard public key (must be a real base64-like key, not "usa.org")
-- **`endpoint`** → The server's reachable IP (or hostname) and port (e.g., 23.123.12.12:51820)
+- **`endpoint`** → The server's reachable IP and port (e.g., 23.123.12.12:51820)
 - **`allowed_ips`** → What traffic should go through this peer (usually 0.0.0.0/0 for all traffic)
-- **`client_ip`** (or available_ips assigned per client) → The IP inside the tunnel (10.x.x.x/32)
+- **`tunnel_ip`** → The IP inside the tunnel with CIDR notation (e.g., 10.221.12.11/32)
+
+### Database Structure
+
+**VPN Servers Table Fields:**
+- `hostname` - Server hostname
+- `location` - Server location
+- `endpoint` - External server endpoint (IP:port)
+- `public_key` - WireGuard public key
+- `tunnel_ip` - Internal tunnel IP with CIDR
+- `allowed_ip` - Allowed IPs for routing (default: 0.0.0.0/0)
+- `ip_address` - Extracted IP from tunnel_ip (auto-populated)
+- `is_premium` - Premium server flag
+- `status` - Server status (active/inactive/maintenance)
+- `current_load` - Current server load (0.0-1.0, read-only)
+- `max_connections` - Maximum allowed connections
 
 ### Server Parameters
 
 **Create Server** (`POST /api/v1/admin/add_server`):
-- `hostname` - Server hostname
-- `location` - Server location
-- `endpoint` - Server endpoint (IP:port)
-- `public_key` - Server WireGuard public key
-- `tunnel_ip` - Tunnel IP with CIDR (e.g., 10.221.12.11/32)
-- `allowed_ips` - Allowed IPs (default: 0.0.0.0/0)
-- `is_premium` - Premium flag (true/false)
-- `status` - Server status (active/inactive/maintenance)
-- `max_connections` - Maximum connections (integer > 0)
+- `hostname` - Server hostname (required)
+- `location` - Server location (required)
+- `endpoint` - Server endpoint IP:port (required)
+- `public_key` - Server WireGuard public key (required)
+- `tunnel_ip` - Tunnel IP with CIDR (required, e.g., 10.221.12.11/32)
+- `allowed_ips` - Allowed IPs (optional, default: 0.0.0.0/0)
+- `is_premium` - Premium flag (optional, default: false)
+- `status` - Server status (optional, default: active)
+- `max_connections` - Maximum connections (optional, default: 100)
 
 **Update Server** (`PUT /api/v1/admin/servers/{server_id}`):
-- All above parameters can be updated
-- `current_load` - Only shown in server listing (not editable)
+- All above parameters can be updated (all optional)
+- `current_load` - Only shown in server listing (read-only, not editable)
 
 ## 🔒 Security
 

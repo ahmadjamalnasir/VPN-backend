@@ -258,33 +258,62 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
 }
 ```
 
-### Add VPN Server Request
+### Add VPN Server Request (Required: hostname, location, endpoint, public_key, tunnel_ip)
 ```bash
 POST /api/v1/admin/add_server?hostname=test-server-1&location=United+States&endpoint=23.123.12.12:51820&public_key=SERVER_PUBLIC_KEY_HERE&tunnel_ip=10.221.12.11/32&allowed_ips=0.0.0.0/0&is_premium=false&status=active&max_connections=10
 ```
 
-### Update VPN Server Request
+### Update VPN Server Request (All parameters optional)
 ```bash
 PUT /api/v1/admin/servers/{server_id}?hostname=updated-server&location=Canada&endpoint=new.endpoint.com:51820&public_key=NEW_PUBLIC_KEY&tunnel_ip=10.0.0.1/32&allowed_ips=0.0.0.0/0&is_premium=true&status=active&max_connections=50
 ```
+
+### Server Parameters
+- **Required for Creation**: `hostname`, `location`, `endpoint`, `public_key`, `tunnel_ip`
+- **Optional**: `allowed_ips` (default: "0.0.0.0/0"), `is_premium` (default: false), `status` (default: "active"), `max_connections` (default: 100)
+- **Read-only**: `current_load` (only in GET response)
+- **Validation**: `endpoint` must include port, `tunnel_ip` must include CIDR notation
 
 ### Server List Response
 ```json
 [
   {
     "id": "uuid",
-    "hostname": "vpn-us-east-1",
-    "location": "us-east",
-    "ip_address": "203.0.113.1",
-    "endpoint": "203.0.113.1:51820",
-    "public_key": "server_public_key",
-    "available_ips": "10.0.0.0/24",
+    "hostname": "test-server-1",
+    "location": "United States",
+    "endpoint": "23.123.12.12:51820",
+    "public_key": "SERVER_PUBLIC_KEY_HERE",
+    "tunnel_ip": "10.221.12.11/32",
+    "allowed_ips": "0.0.0.0/0",
     "is_premium": false,
     "status": "active",
     "current_load": 0.25,
+    "max_connections": 10,
     "created_at": "2024-01-15T10:30:00Z"
   }
 ]
+```
+
+### Server Management Validation Rules
+```bash
+# Required Parameters (POST /api/v1/admin/add_server)
+hostname=test-server-1              # Required: Server hostname
+location=United+States              # Required: Server location  
+endpoint=23.123.12.12:51820        # Required: Must include port
+public_key=SERVER_PUBLIC_KEY_HERE   # Required: WireGuard public key
+tunnel_ip=10.221.12.11/32          # Required: Must include CIDR notation
+
+# Optional Parameters (with defaults)
+allowed_ips=0.0.0.0/0              # Optional: Default "0.0.0.0/0"
+is_premium=false                    # Optional: Default false
+status=active                       # Optional: Default "active"
+max_connections=100                 # Optional: Default 100
+
+# Validation Errors
+400 Bad Request: "endpoint must include port (e.g., 192.168.1.1:51820)"
+400 Bad Request: "tunnel_ip must include CIDR notation (e.g., 10.0.0.1/32)"
+400 Bad Request: "Max connections must be greater than 0"
+400 Bad Request: "Invalid status. Must be: Active, Inactive, Maintenance"
 ```
 
 ### Role-Based Permission Examples
@@ -292,17 +321,18 @@ PUT /api/v1/admin/servers/{server_id}?hostname=updated-server&location=Canada&en
 # Admin (View-Only) - Can access these endpoints:
 GET /api/v1/users/                    # ✅ View VPN users
 GET /api/v1/admin/admin-users         # ✅ View admin users
+GET /api/v1/admin/servers             # ✅ View servers
 GET /api/v1/admin/dashboard           # ✅ View dashboard
 
 # Admin (View-Only) - Cannot access these endpoints:
+POST /api/v1/admin/add_server         # ❌ 403: Super admin access required
+PUT /api/v1/admin/servers/{id}        # ❌ 403: Super admin access required
 POST /api/v1/admin/create-vpn-user    # ❌ 403: Super admin access required
-PUT /api/v1/admin/users/123/status    # ❌ 403: Super admin access required
-POST /api/v1/admin/servers            # ❌ 403: Super admin access required
 
 # Super Admin - Can access all endpoints
-POST /api/v1/admin/create-vpn-user    # ✅ Full access
-PUT /api/v1/admin/users/123/status    # ✅ Full access
-POST /api/v1/admin/servers            # ✅ Full access
+POST /api/v1/admin/add_server         # ✅ Full access
+PUT /api/v1/admin/servers/{id}        # ✅ Full access
+DEL /api/v1/admin/servers/{id}        # ✅ Full access
 ```
 
 ### VPN User List

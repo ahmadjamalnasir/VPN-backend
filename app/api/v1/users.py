@@ -41,7 +41,7 @@ async def get_user_profile(
     )
 
 # ADMIN ENDPOINTS
-@router.get("/", response_model=List[UserResponse])
+@router.get("/")
 async def get_all_users(
     skip: int = Query(0, ge=0, le=10000),
     limit: int = Query(100, ge=1, le=1000),
@@ -53,10 +53,15 @@ async def get_all_users(
     try:
         # Verify admin access from admin_users table
         from app.models.admin_user import AdminUser
-        admin_result = await db.execute(select(AdminUser).where(AdminUser.id == current_user_id))
-        admin_user = admin_result.scalar_one_or_none()
-        if not admin_user:
-            raise HTTPException(status_code=403, detail="Admin access required")
+        from uuid import UUID
+        try:
+            admin_uuid = UUID(current_user_id)
+            admin_result = await db.execute(select(AdminUser).where(AdminUser.id == admin_uuid))
+            admin_user = admin_result.scalar_one_or_none()
+            if not admin_user:
+                raise HTTPException(status_code=403, detail="Admin access required")
+        except ValueError:
+            raise HTTPException(status_code=403, detail="Invalid admin token")
         
         query = select(User)
         
@@ -70,7 +75,21 @@ async def get_all_users(
         result = await db.execute(query)
         users = result.scalars().all()
         
-        return users
+        return [
+            {
+                "id": str(user.id),
+                "user_id": user.user_id,
+                "name": user.name,
+                "email": user.email,
+                "phone": user.phone,
+                "country": user.country,
+                "is_active": user.is_active,
+                "is_premium": user.is_premium,
+                "is_email_verified": user.is_email_verified,
+                "created_at": user.created_at.isoformat() if user.created_at else None
+            }
+            for user in users
+        ]
     except HTTPException:
         raise
     except Exception as e:

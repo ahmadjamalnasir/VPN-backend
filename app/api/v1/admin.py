@@ -21,17 +21,18 @@ router = APIRouter()
 
 async def verify_admin(current_user_id: str = Depends(verify_token), db: AsyncSession = Depends(get_db)):
     """Verify user has admin privileges"""
-    result = await db.execute(select(User).where(User.id == current_user_id))
-    user = result.scalar_one_or_none()
-    if not user or not user.is_superuser:
+    from app.models.admin_user import AdminUser
+    result = await db.execute(select(AdminUser).where(AdminUser.id == current_user_id))
+    admin_user = result.scalar_one_or_none()
+    if not admin_user:
         safe_user_id = sanitize_for_logging(current_user_id)
         logger.warning(f"Unauthorized admin access attempt: {safe_user_id}")
         raise HTTPException(status_code=403, detail="Admin access required")
-    return user
+    return admin_user
 
 @router.get("/dashboard", response_model=AdminDashboardResponse)
 async def get_admin_dashboard(
-    admin_user: User = Depends(verify_admin),
+    admin_user = Depends(verify_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """Get admin dashboard statistics"""
@@ -73,7 +74,7 @@ async def get_all_vpn_users(
     skip: int = Query(0, ge=0, le=10000),
     limit: int = Query(100, ge=1, le=1000),
     search: str = Query(None, max_length=100),
-    admin_user: User = Depends(verify_admin),
+    admin_user = Depends(verify_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """Get all VPN users (regular users, not admin users)"""
@@ -113,7 +114,7 @@ async def get_all_vpn_users(
 async def get_all_admin_users(
     skip: int = Query(0, ge=0, le=10000),
     limit: int = Query(100, ge=1, le=1000),
-    admin_user: User = Depends(verify_admin),
+    admin_user = Depends(verify_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """Get all admin users (backoffice users)"""
@@ -149,7 +150,7 @@ async def create_admin_user(
     password: str = Query(..., description="Admin password"),
     full_name: str = Query(..., description="Admin full name"),
     role: str = Query("admin", description="Admin role: super_admin, admin, moderator"),
-    admin_user: User = Depends(verify_admin),
+    admin_user = Depends(verify_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """Create new admin user"""
@@ -196,7 +197,7 @@ async def create_admin_user(
 async def update_user_status(
     user_id: int,
     request: AdminUserUpdateRequest,
-    admin_user: User = Depends(verify_admin),
+    admin_user = Depends(verify_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """Update user status (admin only)"""
@@ -239,7 +240,7 @@ async def update_user_status(
 @router.post("/servers", response_model=VPNServerResponse)
 async def create_vpn_server(
     request: CreateVPNServerRequest,
-    admin_user: User = Depends(verify_admin),
+    admin_user = Depends(verify_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """Create new VPN server"""
@@ -292,7 +293,7 @@ async def create_vpn_server(
 async def update_vpn_server(
     server_id: str,
     request: UpdateVPNServerRequest,
-    admin_user: User = Depends(verify_admin),
+    admin_user = Depends(verify_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """Update VPN server configuration"""
@@ -341,7 +342,7 @@ async def update_vpn_server(
 @router.delete("/servers/{server_id}")
 async def delete_vpn_server(
     server_id: str,
-    admin_user: User = Depends(verify_admin),
+    admin_user = Depends(verify_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """Delete VPN server"""
@@ -389,7 +390,7 @@ async def delete_vpn_server(
 
 @router.get("/rate-limits/config")
 async def get_rate_limit_config(
-    admin_user: User = Depends(verify_admin)
+    admin_user = Depends(verify_admin)
 ):
     """Get current rate limiting configuration"""
     from app.core.config import get_settings

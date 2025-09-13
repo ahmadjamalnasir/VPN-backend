@@ -245,7 +245,7 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
 }
 ```
 
-### Admin User List
+### VPN User List
 ```json
 [
   {

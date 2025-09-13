@@ -28,7 +28,8 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
         payload = jwt.decode(credentials.credentials, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-        user_id: str = payload.get("user_id")
+        # Check for admin_id first (admin tokens), then user_id (regular user tokens)
+        user_id: str = payload.get("admin_id") or payload.get("user_id")
         if user_id is None:
             raise HTTPException(status_code=401, detail="Invalid token")
         return user_id

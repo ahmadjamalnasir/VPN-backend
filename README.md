@@ -56,18 +56,6 @@ VPN-backend/
 └── API_DOCUMENTATION.md   # Complete API reference
 ```
 
-## 🗑️ Removed Components (v2.0.0 Cleanup)
-
-### **Duplicate Services Removed:**
-- ❌ `app/services/auth_service.py` - **DUPLICATE** (replaced by `auth.py`)
-- ❌ `app/services/payment_service.py` - **DUPLICATE** (replaced by `payment.py`)
-- ❌ `app/services/subscription_service.py` - **NON-FUNCTIONAL** (referenced non-existent models)
-
-### **Legacy API Structure Removed:**
-- ❌ `app/routers/` - **OLD SYSTEM** (replaced by `app/api/v1/`)
-  - `auth.py`, `users.py`, `vpn.py`, `payments.py`, `subscription.py`
-- ❌ `app/dependencies/` - **OLD AUTH SYSTEM** (replaced by modern JWT auth)
-- ❌ `app/schemas/vpn_server.py` - **DUPLICATE** (functionality moved to `vpn.py`)
 
 ### **Impact of Removals:**
 - ✅ **No Functionality Lost** - All features migrated to modern system
@@ -80,7 +68,7 @@ VPN-backend/
 ### 1. Environment Setup
 ```bash
 # Clone repository
-git clone <repository-url>
+git clone <https://github.com/ahmadjamalnasir/VPN-backend>
 cd VPN-backend
 
 # Create virtual environment

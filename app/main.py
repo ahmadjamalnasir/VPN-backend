@@ -26,7 +26,7 @@ async def check_database():
 
 app = FastAPI(
     title="Prime VPN API",
-    description="Production VPN Backend API with admin, mobile, analytics, and real-time features",
+    description="Production VPN Backend API with mobile and admin endpoints",
     version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
@@ -60,21 +60,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include API routers
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
-app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
-app.include_router(subscriptions.router, prefix="/api/v1/subscriptions", tags=["Subscriptions"])
-app.include_router(vpn.router, prefix="/api/v1/vpn", tags=["VPN"])
-app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
-app.include_router(mobile.router, prefix="/api/v1/mobile", tags=["Mobile"])
-app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
-app.include_router(health.router, prefix="/health", tags=["Health"])
-app.include_router(websocket.router, prefix="/ws", tags=["WebSocket"])
+# MOBILE APP ENDPOINTS
+app.include_router(auth.router, prefix="/auth", tags=["Mobile - Authentication"])
+app.include_router(users.router, prefix="/users", tags=["Mobile - Users"])
+app.include_router(subscriptions.router, prefix="/subscriptions", tags=["Mobile - Subscriptions"])
+app.include_router(vpn.router, prefix="/vpn", tags=["Mobile - VPN"])
+app.include_router(websocket.router, prefix="/websocket", tags=["Mobile - WebSocket"])
+
+# ADMIN BACKOFFICE ENDPOINTS
+app.include_router(admin.router, prefix="/admin", tags=["Admin - Management"])
+app.include_router(analytics.router, prefix="/analytics", tags=["Admin - Analytics"])
+app.include_router(health.router, prefix="/health", tags=["Admin - Health"])
+
+# LEGACY MOBILE ENDPOINTS (for compatibility)
+app.include_router(mobile.router, prefix="/mobile", tags=["Legacy Mobile"])
 
 @app.get("/")
 async def root():
     return {
-        "message": "Prime VPN API",
+        "message": "Prime VPN API v2.0.0",
         "version": "2.0.0",
         "security": {
             "ddos_protection": settings.DDOS_PROTECTION_ENABLED,
@@ -82,16 +86,20 @@ async def root():
             "cors_enabled": True
         },
         "docs": "/docs",
-        "endpoints": {
-            "auth": "/api/v1/auth",
-            "users": "/api/v1/users", 
-            "subscriptions": "/api/v1/subscriptions",
-            "vpn": "/api/v1/vpn",
-            "admin": "/api/v1/admin",
-            "mobile": "/api/v1/mobile",
-            "analytics": "/api/v1/analytics",
+        "mobile_endpoints": {
+            "auth": "/auth",
+            "profile": "/users/profile",
+            "vpn": "/vpn",
+            "subscriptions": "/subscriptions/user/plans",
+            "websocket": "/websocket/connection"
+        },
+        "admin_endpoints": {
+            "users": "/users (list), /users/by-id/{id}, /users/status/{id}",
+            "subscriptions": "/subscriptions/plans",
+            "analytics": "/analytics",
+            "vpn_servers": "/vpn/servers",
             "health": "/health",
-            "websocket": "/ws"
+            "websocket": "/websocket/admin-dashboard"
         }
     }
 

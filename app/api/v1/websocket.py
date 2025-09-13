@@ -19,35 +19,48 @@ class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, WebSocket] = {}
         self.user_connections: Dict[str, str] = {}  # user_id -> connection_id
+        self.admin_connections: Dict[str, WebSocket] = {}
     
-    async def connect(self, websocket: WebSocket, user_id: str):
+    async def connect_user(self, websocket: WebSocket, user_id: str):
         await websocket.accept()
-        connection_id = f"ws_{user_id}_{datetime.now().timestamp()}"
+        connection_id = f"user_{user_id}_{datetime.now().timestamp()}"
         self.active_connections[connection_id] = websocket
         self.user_connections[user_id] = connection_id
-        logger.info(f"WebSocket connected: {connection_id}")
+        logger.info(f"User WebSocket connected: {connection_id}")
         return connection_id
     
-    def disconnect(self, connection_id: str, user_id: str):
+    async def connect_admin(self, websocket: WebSocket, admin_id: str):
+        await websocket.accept()
+        connection_id = f"admin_{admin_id}_{datetime.now().timestamp()}"
+        self.admin_connections[connection_id] = websocket
+        logger.info(f"Admin WebSocket connected: {connection_id}")
+        return connection_id
+    
+    def disconnect_user(self, connection_id: str, user_id: str):
         if connection_id in self.active_connections:
             del self.active_connections[connection_id]
         if user_id in self.user_connections:
             del self.user_connections[user_id]
-        logger.info(f"WebSocket disconnected: {connection_id}")
+        logger.info(f"User WebSocket disconnected: {connection_id}")
     
-    async def send_personal_message(self, message: dict, user_id: str):
+    def disconnect_admin(self, connection_id: str):
+        if connection_id in self.admin_connections:
+            del self.admin_connections[connection_id]
+        logger.info(f"Admin WebSocket disconnected: {connection_id}")
+    
+    async def send_to_user(self, message: dict, user_id: str):
         connection_id = self.user_connections.get(user_id)
         if connection_id and connection_id in self.active_connections:
             websocket = self.active_connections[connection_id]
             try:
                 await websocket.send_text(json.dumps(message))
             except Exception as e:
-                logger.error(f"Error sending message to {user_id}: {e}")
-                self.disconnect(connection_id, user_id)
+                logger.error(f"Error sending message to user {user_id}: {e}")
+                self.disconnect_user(connection_id, user_id)
     
-    async def broadcast(self, message: dict):
+    async def broadcast_to_admins(self, message: dict):
         disconnected = []
-        for connection_id, websocket in self.active_connections.items():
+        for connection_id, websocket in self.admin_connections.items():
             try:
                 await websocket.send_text(json.dumps(message))
             except Exception:
@@ -55,8 +68,8 @@ class ConnectionManager:
         
         # Clean up disconnected connections
         for connection_id in disconnected:
-            if connection_id in self.active_connections:
-                del self.active_connections[connection_id]
+            if connection_id in self.admin_connections:
+                del self.admin_connections[connection_id]
 
 manager = ConnectionManager()
 
@@ -82,19 +95,20 @@ async def verify_websocket_token(token: str, db: AsyncSession) -> User:
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-@router.websocket("/connection-status")
+# MOBILE WEBSOCKET
+@router.websocket("/connection")
 async def websocket_connection_status(
     websocket: WebSocket,
     token: str,
     db: AsyncSession = Depends(get_db)
 ):
-    """WebSocket endpoint for real-time connection status updates"""
+    """WebSocket endpoint for real-time connection status updates (Mobile)"""
     try:
         # Verify token
         user = await verify_websocket_token(token, db)
         
         # Connect WebSocket
-        connection_id = await manager.connect(websocket, str(user.id))
+        connection_id = await manager.connect_user(websocket, str(user.id))
         
         # Send initial status
         await send_connection_status(user.id, db)
@@ -111,14 +125,55 @@ async def websocket_connection_status(
                     await send_connection_status(user.id, db)
                 
         except WebSocketDisconnect:
-            manager.disconnect(connection_id, str(user.id))
+            manager.disconnect_user(connection_id, str(user.id))
             
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.error(f"User WebSocket error: {e}")
+        await websocket.close(code=1008, reason="Authentication failed")
+
+# ADMIN WEBSOCKET
+@router.websocket("/admin-dashboard")
+async def websocket_admin_dashboard(
+    websocket: WebSocket,
+    token: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """WebSocket endpoint for admin dashboard real-time updates (Admin only)"""
+    try:
+        # Verify admin token
+        user = await verify_websocket_token(token, db)
+        if not user.is_superuser:
+            await websocket.close(code=1008, reason="Admin access required")
+            return
+        
+        # Connect WebSocket
+        connection_id = await manager.connect_admin(websocket, str(user.id))
+        
+        # Send initial dashboard data
+        await send_admin_dashboard_data(websocket, db)
+        
+        try:
+            while True:
+                # Keep connection alive and handle admin requests
+                data = await websocket.receive_text()
+                message = json.loads(data)
+                
+                if message.get("type") == "ping":
+                    await websocket.send_text(json.dumps({"type": "pong"}))
+                elif message.get("type") == "get_dashboard":
+                    await send_admin_dashboard_data(websocket, db)
+                elif message.get("type") == "get_system_stats":
+                    await send_system_stats(websocket, db)
+                
+        except WebSocketDisconnect:
+            manager.disconnect_admin(connection_id)
+            
+    except Exception as e:
+        logger.error(f"Admin WebSocket error: {e}")
         await websocket.close(code=1008, reason="Authentication failed")
 
 async def send_connection_status(user_id: str, db: AsyncSession):
-    """Send current connection status to user"""
+    """Send current connection status to user (Mobile)"""
     try:
         # Get active connection
         result = await db.execute(
@@ -153,70 +208,90 @@ async def send_connection_status(user_id: str, db: AsyncSession):
                 "data": None
             }
         
-        await manager.send_personal_message(status_message, user_id)
+        await manager.send_to_user(status_message, user_id)
         
     except Exception as e:
         logger.error(f"Error sending connection status: {e}")
 
-@router.websocket("/system-alerts")
-async def websocket_system_alerts(
-    websocket: WebSocket,
-    token: str,
-    db: AsyncSession = Depends(get_db)
-):
-    """WebSocket endpoint for system-wide alerts (admin only)"""
+async def send_admin_dashboard_data(websocket: WebSocket, db: AsyncSession):
+    """Send admin dashboard data (Admin only)"""
     try:
-        # Verify admin token
-        user = await verify_websocket_token(token, db)
-        if not user.is_superuser:
-            await websocket.close(code=1008, reason="Admin access required")
-            return
+        from sqlalchemy import func
+        from app.models.vpn_server import VPNServer
         
-        # Connect WebSocket
-        connection_id = await manager.connect(websocket, f"admin_{user.id}")
+        # Get dashboard statistics
+        total_users = await db.scalar(select(func.count(User.id)))
+        active_users = await db.scalar(select(func.count(User.id)).where(User.is_active == True))
+        premium_users = await db.scalar(select(func.count(User.id)).where(User.is_premium == True))
         
-        try:
-            while True:
-                # Keep connection alive
-                data = await websocket.receive_text()
-                message = json.loads(data)
-                
-                if message.get("type") == "ping":
-                    await websocket.send_text(json.dumps({"type": "pong"}))
-                
-        except WebSocketDisconnect:
-            manager.disconnect(connection_id, f"admin_{user.id}")
-            
+        total_servers = await db.scalar(select(func.count(VPNServer.id)))
+        active_servers = await db.scalar(select(func.count(VPNServer.id)).where(VPNServer.status == "active"))
+        
+        active_connections = await db.scalar(
+            select(func.count(Connection.id)).where(Connection.status == "connected")
+        )
+        
+        dashboard_data = {
+            "type": "dashboard_update",
+            "data": {
+                "total_users": total_users or 0,
+                "active_users": active_users or 0,
+                "premium_users": premium_users or 0,
+                "total_servers": total_servers or 0,
+                "active_servers": active_servers or 0,
+                "active_connections": active_connections or 0,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        }
+        
+        await websocket.send_text(json.dumps(dashboard_data))
+        
     except Exception as e:
-        logger.error(f"Admin WebSocket error: {e}")
-        await websocket.close(code=1008, reason="Authentication failed")
+        logger.error(f"Error sending admin dashboard data: {e}")
 
-# Background task to send periodic updates
-async def broadcast_system_stats():
-    """Background task to broadcast system statistics"""
-    while True:
-        try:
-            # This would be called periodically to send system updates
-            # Implementation depends on your specific monitoring needs
-            await asyncio.sleep(30)  # Send updates every 30 seconds
-            
-        except Exception as e:
-            logger.error(f"Error in broadcast task: {e}")
-            await asyncio.sleep(60)  # Wait longer on error
+async def send_system_stats(websocket: WebSocket, db: AsyncSession):
+    """Send system statistics (Admin only)"""
+    try:
+        from sqlalchemy import func, text
+        
+        # Connection stats (last 24 hours)
+        yesterday = datetime.utcnow() - timedelta(days=1)
+        daily_connections = await db.scalar(
+            select(func.count(Connection.id)).where(Connection.created_at >= yesterday)
+        )
+        
+        # Server load stats
+        avg_load = await db.scalar(
+            select(func.avg(VPNServer.current_load)).where(VPNServer.status == "active")
+        )
+        
+        system_stats = {
+            "type": "system_stats",
+            "data": {
+                "daily_connections": daily_connections or 0,
+                "avg_server_load": round((avg_load or 0) * 100, 1),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        }
+        
+        await websocket.send_text(json.dumps(system_stats))
+        
+    except Exception as e:
+        logger.error(f"Error sending system stats: {e}")
 
 # Utility functions for external use
 async def notify_connection_change(user_id: str, status: str, connection_data: dict = None):
-    """Notify user of connection status change"""
+    """Notify user of connection status change (Mobile)"""
     message = {
         "type": "connection_change",
         "status": status,
         "data": connection_data,
         "timestamp": datetime.utcnow().isoformat()
     }
-    await manager.send_personal_message(message, user_id)
+    await manager.send_to_user(message, user_id)
 
-async def notify_system_alert(alert_type: str, message: str, severity: str = "info"):
-    """Broadcast system alert to all admin connections"""
+async def notify_admin_alert(alert_type: str, message: str, severity: str = "info"):
+    """Broadcast system alert to all admin connections (Admin only)"""
     alert_message = {
         "type": "system_alert",
         "alert_type": alert_type,
@@ -224,4 +299,4 @@ async def notify_system_alert(alert_type: str, message: str, severity: str = "in
         "severity": severity,
         "timestamp": datetime.utcnow().isoformat()
     }
-    await manager.broadcast(alert_message)
+    await manager.broadcast_to_admins(alert_message)

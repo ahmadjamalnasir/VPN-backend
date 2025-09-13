@@ -5,7 +5,7 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models.user import User
 from app.models.connection import Connection
-from app.schemas.user import UserResponse, UserUpdateRequest
+from app.schemas.user import UserResponse, UserUpdateRequest, UserProfileResponse
 from app.schemas.connection import ConnectionSessionResponse
 from app.services.auth import get_password_hash, verify_token
 from uuid import UUID
@@ -13,6 +13,126 @@ from typing import List
 
 router = APIRouter()
 
+# MOBILE ENDPOINT
+@router.get("/profile", response_model=UserProfileResponse)
+async def get_user_profile(
+    current_user_id: str = Depends(verify_token),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get user profile for mobile app"""
+    result = await db.execute(
+        select(User).options(selectinload(User.user_subscriptions))
+        .where(User.id == current_user_id)
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Get active subscription
+    active_subscription = None
+    for sub in user.user_subscriptions:
+        if sub.status == "active" and sub.is_active:
+            active_subscription = sub
+            break
+    
+    return UserProfileResponse(
+        user_id=user.user_id,
+        name=user.name,
+        email=user.email,
+        phone=user.phone,
+        country=user.country,
+        is_premium=user.is_premium,
+        is_email_verified=user.is_email_verified,
+        subscription_status=active_subscription.status if active_subscription else "none",
+        subscription_expires=active_subscription.end_date if active_subscription else None,
+        created_at=user.created_at
+    )
+
+# ADMIN ENDPOINTS
+@router.get("/", response_model=List[UserResponse])
+async def get_all_users(
+    skip: int = Query(0, ge=0, le=10000),
+    limit: int = Query(100, ge=1, le=1000),
+    search: str = Query(None, max_length=100),
+    current_user_id: str = Depends(verify_token),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all users (Admin only)"""
+    # Verify admin access
+    admin_result = await db.execute(select(User).where(User.id == current_user_id))
+    admin_user = admin_result.scalar_one_or_none()
+    if not admin_user or not admin_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    query = select(User)
+    
+    if search:
+        query = query.where(
+            User.email.ilike(f"%{search}%") | 
+            User.name.ilike(f"%{search}%")
+        )
+    
+    query = query.offset(skip).limit(limit).order_by(User.created_at.desc())
+    result = await db.execute(query)
+    users = result.scalars().all()
+    
+    return users
+
+@router.get("/by-id/{user_id}", response_model=UserResponse)
+async def get_user_by_id(
+    user_id: int,
+    current_user_id: str = Depends(verify_token),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get user by ID (Admin only)"""
+    # Verify admin access
+    admin_result = await db.execute(select(User).where(User.id == current_user_id))
+    admin_user = admin_result.scalar_one_or_none()
+    if not admin_user or not admin_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    result = await db.execute(select(User).where(User.user_id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return user
+
+@router.put("/status/{user_id}")
+async def update_user_status(
+    user_id: int,
+    is_active: bool = Query(..., description="User active status"),
+    is_premium: bool = Query(None, description="Premium status"),
+    is_superuser: bool = Query(None, description="Admin status"),
+    current_user_id: str = Depends(verify_token),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update user status (Admin only)"""
+    # Verify admin access
+    admin_result = await db.execute(select(User).where(User.id == current_user_id))
+    admin_user = admin_result.scalar_one_or_none()
+    if not admin_user or not admin_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    result = await db.execute(select(User).where(User.user_id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Prevent admin from disabling themselves
+    if str(user.id) == str(admin_user.id) and is_active is False:
+        raise HTTPException(status_code=400, detail="Cannot deactivate your own account")
+    
+    user.is_active = is_active
+    if is_premium is not None:
+        user.is_premium = is_premium
+    if is_superuser is not None:
+        user.is_superuser = is_superuser
+    
+    await db.commit()
+    return {"message": "User status updated successfully"}
+
+# LEGACY ENDPOINT (kept for compatibility)
 @router.get("/connections", response_model=List[ConnectionSessionResponse])
 async def get_user_connections(
     user_id: int = Query(..., description="User ID"),

@@ -12,6 +12,7 @@ class SubscriptionPlanResponse(BaseModel):
     duration_days: int
     is_premium: bool
     features: Optional[str]
+    created_at: datetime
     
     class Config:
         from_attributes = True
@@ -19,21 +20,22 @@ class SubscriptionPlanResponse(BaseModel):
 class UserSubscriptionResponse(BaseModel):
     id: UUID
     user_id: UUID
-    plan: SubscriptionPlanResponse
+    plan_id: UUID  # FIXED: This should be UUID to match database
     status: str
     start_date: datetime
     end_date: datetime
     auto_renew: bool
     payment_method: Optional[str]
-    is_active: bool
-    days_remaining: int
     created_at: datetime
+    
+    # Computed properties from model
+    plan: Optional[SubscriptionPlanResponse] = None
     
     class Config:
         from_attributes = True
 
 class AssignSubscriptionRequest(BaseModel):
-    user_email: str
-    plan_id: int
+    user_id: int  # Readable user ID
+    plan_id: int  # Readable plan ID
     auto_renew: bool = True
     payment_method: Optional[str] = None

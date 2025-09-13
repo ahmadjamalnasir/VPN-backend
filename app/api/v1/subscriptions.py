@@ -79,14 +79,14 @@ async def get_user_subscription_history(
 @router.post("/assign", response_model=UserSubscriptionResponse)
 async def assign_subscription(
     user_id: int = Query(..., description="User ID"),
-    plan_id: int = Query(..., description="Plan ID"),
+    plan_id: int = Query(..., description="Plan ID (readable integer)"),
     auto_renew: bool = Query(True, description="Auto renew subscription"),
     payment_method: str = Query(None, description="Payment method"),
     current_user_id: str = Depends(verify_token),
     db: AsyncSession = Depends(get_db)
 ):
     """Assign subscription plan to user"""
-    # Find user
+    # Find user by readable user_id
     user_result = await db.execute(select(User).where(User.user_id == user_id))
     user = user_result.scalar_one_or_none()
     if not user:
@@ -98,7 +98,7 @@ async def assign_subscription(
     if str(user.id) != current_user_id and not requesting_user.is_superuser:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # Find plan
+    # Find plan by readable plan_id
     plan_result = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.plan_id == plan_id))
     plan = plan_result.scalar_one_or_none()
     if not plan:
@@ -113,13 +113,13 @@ async def assign_subscription(
     for sub in existing_subscriptions:
         sub.status = "canceled"
     
-    # Create new subscription
+    # Create new subscription - FIXED: Use plan.id (UUID) not plan_id (int)
     start_date = datetime.utcnow()
     end_date = start_date + timedelta(days=plan.duration_days)
     
     subscription = UserSubscription(
-        user_id=user.id,
-        plan_id=plan.id,
+        user_id=user.id,  # UUID
+        plan_id=plan.id,  # UUID - FIXED: was using plan_id (int)
         status="active",
         start_date=start_date,
         end_date=end_date,

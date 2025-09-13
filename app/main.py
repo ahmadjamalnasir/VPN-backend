@@ -107,7 +107,8 @@ async def root():
             "create_admin_user": "/api/v1/admin/create-admin-user",
             "subscriptions": "/api/v1/subscriptions/plans",
             "analytics": "/api/v1/analytics",
-            "vpn_servers": "/api/v1/vpn/servers",
+            "list_servers": "/api/v1/admin/servers",
+            "add_server": "/api/v1/admin/add_server",
             "health": "/api/v1/health",
             "websocket": "/api/v1/websocket/admin-dashboard",
             "rate_limits": "/api/v1/admin/rate-limits/config"

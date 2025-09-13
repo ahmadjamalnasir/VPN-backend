@@ -67,7 +67,8 @@ GET  /api/v1/admin/rate-limits/config                # Rate limiting config
 POST /api/v1/admin/create-admin-user                  # Create new admin user
 POST /api/v1/admin/create-vpn-user                    # Create new VPN user
 PUT  /api/v1/admin/users/{user_id}/status             # Update user status
-POST /api/v1/admin/servers                           # Create VPN server
+GET  /api/v1/admin/servers                           # List all VPN servers
+POST /api/v1/admin/add_server                        # Add new VPN server
 PUT  /api/v1/admin/servers/{server_id}               # Update VPN server
 DEL  /api/v1/admin/servers/{server_id}               # Delete VPN server
 ```
@@ -255,6 +256,30 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
   "full_name": "John Admin",
   "role": "admin"
 }
+```
+
+### Add VPN Server Request
+```bash
+POST /api/v1/admin/add_server?hostname=vpn-us-east-1&location=us-east&ip_address=203.0.113.1&endpoint=203.0.113.1:51820&public_key=server_public_key&available_ips=10.0.0.0/24&is_premium=false&status=active
+```
+
+### Server List Response
+```json
+[
+  {
+    "id": "uuid",
+    "hostname": "vpn-us-east-1",
+    "location": "us-east",
+    "ip_address": "203.0.113.1",
+    "endpoint": "203.0.113.1:51820",
+    "public_key": "server_public_key",
+    "available_ips": "10.0.0.0/24",
+    "is_premium": false,
+    "status": "active",
+    "current_load": 0.25,
+    "created_at": "2024-01-15T10:30:00Z"
+  }
+]
 ```
 
 ### Role-Based Permission Examples

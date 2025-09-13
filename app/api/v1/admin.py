@@ -302,6 +302,7 @@ async def add_vpn_server(
     available_ips: str = Query(..., description="Available IP range"),
     is_premium: bool = Query(False, description="Premium server flag"),
     status: str = Query("active", description="Server status"),
+    max_connection: int = Query(100, description="Maximum connections allowed"),
     admin_user = Depends(verify_super_admin),
     db: AsyncSession = Depends(get_db)
 ):
@@ -325,7 +326,8 @@ async def add_vpn_server(
             public_key=public_key,
             available_ips=available_ips,
             is_premium=is_premium,
-            status=status
+            status=status,
+            max_connections=max_connection
         )
         db.add(server)
         await db.commit()
@@ -354,6 +356,7 @@ async def update_vpn_server(
     status: str = Query(None, description="Server status: Active, Inactive, Maintenance"),
     is_premium: bool = Query(None, description="Premium server flag"),
     max_load: float = Query(None, description="Maximum server load (0.0-1.0)"),
+    max_connection: int = Query(None, description="Maximum connections allowed"),
     admin_user = Depends(verify_super_admin),
     db: AsyncSession = Depends(get_db)
 ):
@@ -387,6 +390,12 @@ async def update_vpn_server(
                 raise HTTPException(status_code=400, detail="Max load must be between 0.0 and 1.0")
             server.current_load = max_load
         
+        # Validate and update max connections
+        if max_connection is not None:
+            if max_connection <= 0:
+                raise HTTPException(status_code=400, detail="Max connections must be greater than 0")
+            server.max_connections = max_connection
+        
         await db.commit()
         
         safe_hostname = sanitize_for_logging(server.hostname)
@@ -398,7 +407,8 @@ async def update_vpn_server(
             "hostname": server.hostname,
             "status": server.status,
             "is_premium": server.is_premium,
-            "max_load": server.current_load
+            "max_load": server.current_load,
+            "max_connection": server.max_connections
         }
     except HTTPException:
         raise

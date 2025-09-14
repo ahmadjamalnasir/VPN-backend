@@ -46,28 +46,41 @@ WS /api/v1/websocket/connection?token=jwt_token        # Real-time connection st
 
 ## 🔧 ADMIN BACKOFFICE ENDPOINTS
 
-### VPN User Management (`/api/v1/users`) - Role-Based Access
+### Admin - Dashboard (`/api/v1/admin`) - Role-Based Access
 ```http
 # View Access (Admin + Super Admin)
-GET /api/v1/users/?skip=0&limit=100&search=john       # List all VPN users with pagination/search
-GET /api/v1/users/by-id/{user_id}                     # Get specific VPN user by ID
-
-# Modification Access (Super Admin Only)
-PUT /api/v1/users/status/{user_id}?is_active=true&is_premium=false&is_superuser=false  # Update VPN user status
+GET  /api/v1/admin/dashboard                          # Admin dashboard stats
+GET  /api/v1/admin/rate-limits/config                # Rate limiting config
 ```
 
-### Admin User Management (`/api/v1/admin`) - Role-Based Access
+### Admin - User Management (`/api/v1/admin`) - Role-Based Access
+
+#### VPN User Management
+```http
+# View Access (Admin + Super Admin)
+GET /api/v1/admin/vpn-users?skip=0&limit=100&search=john  # List all VPN users with pagination/search
+
+# Modification Access (Super Admin Only)
+PUT /api/v1/admin/vpn-user/{user_id}/status?is_active=true&is_premium=false  # Update VPN user status
+```
+
+#### Admin User Management
 ```http
 # View Access (Admin + Super Admin)
 GET  /api/v1/admin/admin-users?skip=0&limit=100       # List all admin users
-GET  /api/v1/admin/dashboard                          # Admin dashboard stats
-GET  /api/v1/admin/rate-limits/config                # Rate limiting config
 
 # Modification Access (Super Admin Only)
 POST /api/v1/admin/create-admin-user                  # Create new admin user
-POST /api/v1/admin/create-vpn-user                    # Create new VPN user
-PUT  /api/v1/admin/users/{user_id}/status             # Update user status
+PUT  /api/v1/admin/admin-user/{admin_id}?password=string&full_name=string&role=admin  # Update admin user
+DEL  /api/v1/admin/users/{admin_id}                   # Delete admin user
+```
+
+### Admin - Server Management (`/api/v1/admin`) - Role-Based Access
+```http
+# View Access (Admin + Super Admin)
 GET  /api/v1/admin/servers                           # List all VPN servers
+
+# Modification Access (Super Admin Only)
 POST /api/v1/admin/add_server                        # Add new VPN server
 PUT  /api/v1/admin/servers/{server_id}               # Update VPN server
 DEL  /api/v1/admin/servers/{server_id}               # Delete VPN server
@@ -77,11 +90,6 @@ DEL  /api/v1/admin/servers/{server_id}               # Delete VPN server
 ```http
 GET  /api/v1/subscriptions/plans                       # Get all subscription plans
 POST /api/v1/subscriptions/plans?name=Premium&plan_type=monthly&price=9.99&duration_days=30&is_premium=true  # Create new plan
-```
-
-### VPN Server Management (`/api/v1/vpn/servers`) - Admin JWT Required
-```http
-GET /api/v1/vpn/servers?skip=0&limit=100              # Get all servers for admin management
 ```
 
 ### Analytics (`/api/v1/analytics`) - Admin/Premium JWT Required

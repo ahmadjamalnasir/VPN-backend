@@ -63,6 +63,12 @@ app.add_middleware(
 # ADMIN AUTHENTICATION (No Rate Limiting)
 app.include_router(admin_auth.router, prefix="/api/v1/admin-auth", tags=["Admin - Authentication"])
 
+# ADMIN BACKOFFICE ENDPOINTS
+app.include_router(admin.router, prefix="/api/v1/admin")
+app.include_router(user_management.router, prefix="/api/v1/admin")
+app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Admin - Analytics"])
+app.include_router(health.router, prefix="/api/v1/health", tags=["Admin - Health"])
+
 # MOBILE APP ENDPOINTS
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Mobile - Authentication"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Mobile - Users"])
@@ -70,11 +76,6 @@ app.include_router(subscriptions.router, prefix="/api/v1/subscriptions", tags=["
 app.include_router(vpn.router, prefix="/api/v1/vpn", tags=["Mobile - VPN"])
 app.include_router(websocket.router, prefix="/api/v1/websocket", tags=["Mobile - WebSocket"])
 
-# ADMIN BACKOFFICE ENDPOINTS
-app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin - Management"])
-app.include_router(user_management.router, prefix="/api/v1/admin", tags=["Admin - User Management"])
-app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Admin - Analytics"])
-app.include_router(health.router, prefix="/api/v1/health", tags=["Admin - Health"])
 
 # LEGACY MOBILE ENDPOINTS (for compatibility)
 app.include_router(mobile.router, prefix="/api/v1/mobile", tags=["Legacy Mobile"])
@@ -93,17 +94,11 @@ async def root():
         "admin_authentication": {
             "login": "/api/v1/admin-auth/login (No rate limiting)"
         },
-        "mobile_endpoints": {
-            "auth": "/api/v1/auth",
-            "profile": "/api/v1/users/profile",
-            "vpn": "/api/v1/vpn",
-            "subscriptions": "/api/v1/subscriptions/user/plans",
-            "websocket": "/api/v1/websocket/connection"
-        },
+        
         "admin_endpoints": {
-            "vpn_users": "/api/v1/users (list), /api/v1/users/by-id/{id}, /api/v1/users/status/{id}",
             "admin_users": "/api/v1/admin/admin-users (list)",
-            "create_vpn_user": "/api/v1/admin/create-vpn-user",
+
+            "vpn_users": "/api/v1/admin/vpn-users (list), /api/v1/admin/vpn-user/{id}/status",
             "create_admin_user": "/api/v1/admin/create-admin-user",
             "subscriptions": "/api/v1/subscriptions/plans",
             "analytics": "/api/v1/analytics",
@@ -112,6 +107,13 @@ async def root():
             "health": "/api/v1/health",
             "websocket": "/api/v1/websocket/admin-dashboard",
             "rate_limits": "/api/v1/admin/rate-limits/config"
+        },
+        "mobile_endpoints": {
+            "auth": "/api/v1/auth",
+            "profile": "/api/v1/users/profile",
+            "vpn": "/api/v1/vpn",
+            "subscriptions": "/api/v1/subscriptions/user/plans",
+            "websocket": "/api/v1/websocket/connection"
         }
     }
 

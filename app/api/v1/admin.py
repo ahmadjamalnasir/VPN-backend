@@ -51,7 +51,7 @@ async def verify_super_admin(current_user_id: str = Depends(verify_token), db: A
     except ValueError:
         raise HTTPException(status_code=403, detail="Invalid admin token")
 
-@router.get("/dashboard", response_model=AdminDashboardResponse)
+@router.get("/dashboard", response_model=AdminDashboardResponse, tags=["Admin - Dashboard"])
 async def get_admin_dashboard(
     admin_user = Depends(verify_admin),
     db: AsyncSession = Depends(get_db)
@@ -90,7 +90,7 @@ async def get_admin_dashboard(
         logger.error(f"Admin dashboard error: {safe_error}")
         raise HTTPException(status_code=500, detail="Dashboard data unavailable")
 
-@router.get("/vpn-users", response_model=List[AdminUserResponse])
+@router.get("/vpn-users", tags=["Admin - User Management"])
 async def get_all_vpn_users(
     skip: int = Query(0, ge=0, le=10000),
     limit: int = Query(100, ge=1, le=1000),
@@ -131,7 +131,7 @@ async def get_all_vpn_users(
         logger.error(f"Admin users list error: {safe_error}")
         raise HTTPException(status_code=500, detail="Users data unavailable")
 
-@router.get("/admin-users")
+@router.get("/admin-users", tags=["Admin - User Management"])
 async def get_all_admin_users(
     skip: int = Query(0, ge=0, le=10000),
     limit: int = Query(100, ge=1, le=1000),
@@ -164,101 +164,11 @@ async def get_all_admin_users(
         logger.error(f"Admin users list error: {safe_error}")
         raise HTTPException(status_code=500, detail="Admin users data unavailable")
 
-@router.post("/admin-users")
-async def create_admin_user(
-    username: str = Query(..., description="Admin username"),
-    email: str = Query(..., description="Admin email"),
-    password: str = Query(..., description="Admin password"),
-    full_name: str = Query(..., description="Admin full name"),
-    role: str = Query("admin", description="Admin role: super_admin, admin, moderator"),
-    admin_user = Depends(verify_super_admin),
-    db: AsyncSession = Depends(get_db)
-):
-    """Create new admin user"""
-    try:
-        from app.models.admin_user import AdminUser, AdminRole
-        from app.services.auth import get_password_hash
-        
-        # Validate role
-        if role not in ["super_admin", "admin", "moderator"]:
-            raise HTTPException(status_code=400, detail="Invalid role")
-        
-        # Check if username/email exists
-        existing = await db.execute(
-            select(AdminUser).where(
-                (AdminUser.username == username) | (AdminUser.email == email)
-            )
-        )
-        if existing.scalar_one_or_none():
-            raise HTTPException(status_code=400, detail="Username or email already exists")
-        
-        # Create admin user
-        new_admin = AdminUser(
-            username=username,
-            email=email,
-            hashed_password=get_password_hash(password),
-            full_name=full_name,
-            role=AdminRole(role)
-        )
-        
-        db.add(new_admin)
-        await db.commit()
-        await db.refresh(new_admin)
-        
-        return {"message": "Admin user created successfully", "admin_id": new_admin.admin_id}
-    except HTTPException:
-        raise
-    except Exception as e:
-        await db.rollback()
-        safe_error = sanitize_for_logging(str(e))
-        logger.error(f"Admin user creation error: {safe_error}")
-        raise HTTPException(status_code=500, detail="Admin user creation failed")
 
-@router.put("/users/{user_id}/status")
-async def update_user_status(
-    user_id: int,
-    request: AdminUserUpdateRequest,
-    admin_user = Depends(verify_super_admin),
-    db: AsyncSession = Depends(get_db)
-):
-    """Update user status (admin only)"""
-    try:
-        # Validate user_id
-        if user_id <= 0 or user_id > 999999999:
-            raise HTTPException(status_code=400, detail="Invalid user ID")
-        
-        result = await db.execute(select(User).where(User.user_id == user_id))
-        user = result.scalar_one_or_none()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        # Prevent admin from disabling themselves
-        if str(user.id) == str(admin_user.id) and request.is_active is False:
-            raise HTTPException(status_code=400, detail="Cannot deactivate your own account")
-        
-        if request.is_active is not None:
-            user.is_active = request.is_active
-        if request.is_premium is not None:
-            user.is_premium = request.is_premium
-        if request.is_superuser is not None:
-            user.is_superuser = request.is_superuser
-        
-        await db.commit()
-        
-        safe_email = sanitize_for_logging(user.email)
-        safe_admin = sanitize_for_logging(admin_user.email)
-        logger.info(f"User status updated by admin {safe_admin}: {safe_email}")
-        
-        return {"message": "User status updated successfully"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        await db.rollback()
-        safe_error = sanitize_for_logging(str(e))
-        logger.error(f"Admin user update error: {safe_error}")
-        raise HTTPException(status_code=500, detail="Update failed")
 
-@router.get("/servers")
+
+
+@router.get("/servers", tags=["Admin - Server Management"])
 async def get_all_servers(
     skip: int = Query(0, ge=0, le=10000),
     limit: int = Query(100, ge=1, le=1000),
@@ -293,7 +203,7 @@ async def get_all_servers(
         logger.error(f"Server list error: {safe_error}")
         raise HTTPException(status_code=500, detail="Server list unavailable")
 
-@router.post("/add_server")
+@router.post("/add_server", tags=["Admin - Server Management"])
 async def add_vpn_server(
     hostname: str = Query(..., description="Server hostname"),
     location: str = Query(..., description="Server location"),
@@ -356,7 +266,7 @@ async def add_vpn_server(
         logger.error(f"Server creation error: {error_msg}")
         raise HTTPException(status_code=500, detail=f"Server creation failed: {error_msg}")
 
-@router.put("/servers/{server_id}")
+@router.put("/servers/{server_id}", tags=["Admin - Server Management"])
 async def update_vpn_server(
     server_id: str,
     hostname: str = Query(None, description="Server hostname"),
@@ -449,7 +359,7 @@ async def update_vpn_server(
         logger.error(f"Server update error: {error_msg}")
         raise HTTPException(status_code=500, detail=f"Server update failed: {error_msg}")
 
-@router.delete("/servers/{server_id}")
+@router.delete("/servers/{server_id}", tags=["Admin - Server Management"])
 async def delete_vpn_server(
     server_id: str,
     admin_user = Depends(verify_super_admin),
@@ -498,7 +408,120 @@ async def delete_vpn_server(
         logger.error(f"Server deletion error: {safe_error}")
         raise HTTPException(status_code=500, detail="Server deletion failed")
 
-@router.get("/rate-limits/config")
+@router.put("/vpn-user/{user_id}/status", tags=["Admin - User Management"])
+async def update_vpn_user_status(
+    user_id: int,
+    is_active: bool = Query(..., description="User active status"),
+    is_premium: bool = Query(None, description="Premium status"),
+    admin_user = Depends(verify_super_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update VPN user status (Super Admin only)"""
+    try:
+        result = await db.execute(select(User).where(User.user_id == user_id))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        user.is_active = is_active
+        if is_premium is not None:
+            user.is_premium = is_premium
+        
+        await db.commit()
+        
+        safe_email = sanitize_for_logging(user.email)
+        safe_admin = sanitize_for_logging(admin_user.email)
+        logger.info(f"VPN user status updated by admin {safe_admin}: {safe_email}")
+        
+        return {"message": "VPN user status updated successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        safe_error = sanitize_for_logging(str(e))
+        logger.error(f"VPN user update error: {safe_error}")
+        raise HTTPException(status_code=500, detail="Update failed")
+
+@router.put("/admin-user/{admin_id}", tags=["Admin - User Management"])
+async def update_admin_user(
+    admin_id: int,
+    password: str = Query(None, description="New password"),
+    full_name: str = Query(None, description="Full name"),
+    role: str = Query(None, description="Admin role: super_admin, admin, moderator"),
+    admin_user = Depends(verify_super_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update admin user information (Super Admin only)"""
+    try:
+        from app.models.admin_user import AdminUser, AdminRole
+        from app.services.auth import get_password_hash
+        
+        result = await db.execute(select(AdminUser).where(AdminUser.admin_id == admin_id))
+        target_admin = result.scalar_one_or_none()
+        if not target_admin:
+            raise HTTPException(status_code=404, detail="Admin user not found")
+        
+        if password:
+            target_admin.hashed_password = get_password_hash(password)
+        if full_name:
+            target_admin.full_name = full_name
+        if role:
+            if role not in ["super_admin", "admin", "moderator"]:
+                raise HTTPException(status_code=400, detail="Invalid role")
+            target_admin.role = AdminRole(role)
+        
+        await db.commit()
+        
+        safe_admin = sanitize_for_logging(admin_user.email)
+        safe_target = sanitize_for_logging(target_admin.email)
+        logger.info(f"Admin user updated by {safe_admin}: {safe_target}")
+        
+        return {"message": "Admin user updated successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        safe_error = sanitize_for_logging(str(e))
+        logger.error(f"Admin user update error: {safe_error}")
+        raise HTTPException(status_code=500, detail="Update failed")
+
+@router.delete("/users/{admin_id}", tags=["Admin - User Management"])
+async def delete_admin_user(
+    admin_id: int,
+    admin_user = Depends(verify_super_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete admin user (Super Admin only)"""
+    try:
+        from app.models.admin_user import AdminUser
+        
+        result = await db.execute(select(AdminUser).where(AdminUser.admin_id == admin_id))
+        target_admin = result.scalar_one_or_none()
+        if not target_admin:
+            raise HTTPException(status_code=404, detail="Admin user not found")
+        
+        # Prevent admin from deleting themselves
+        if target_admin.id == admin_user.id:
+            raise HTTPException(status_code=400, detail="Cannot delete your own account")
+        
+        safe_target = sanitize_for_logging(target_admin.email)
+        
+        await db.delete(target_admin)
+        await db.commit()
+        
+        safe_admin = sanitize_for_logging(admin_user.email)
+        logger.info(f"Admin user deleted by {safe_admin}: {safe_target}")
+        
+        return {"message": "Admin user deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        safe_error = sanitize_for_logging(str(e))
+        logger.error(f"Admin user deletion error: {safe_error}")
+        raise HTTPException(status_code=500, detail="Deletion failed")
+
+@router.get("/rate-limits/config", tags=["Admin - Dashboard"])
 async def get_rate_limit_config(
     admin_user = Depends(verify_admin)
 ):

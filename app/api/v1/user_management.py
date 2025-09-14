@@ -50,47 +50,9 @@ async def verify_super_admin_access(current_user_id: str = Depends(verify_token)
     except ValueError:
         raise HTTPException(status_code=403, detail="Invalid admin token")
 
-@router.post("/create-vpn-user")
-async def create_vpn_user(
-    request: CreateVPNUserRequest,
-    admin_user = Depends(verify_super_admin_access),
-    db: AsyncSession = Depends(get_db)
-):
-    """Create VPN user - saves to users table"""
-    try:
-        # Check if user email exists
-        existing = await db.execute(
-            select(User).where(User.email == request.email)
-        )
-        if existing.scalar_one_or_none():
-            raise HTTPException(status_code=400, detail="User email already exists")
-        
-        new_user = User(
-            name=request.name,
-            email=request.email,
-            hashed_password=get_password_hash(request.password),
-            phone=request.phone,
-            country=request.country,
-            is_email_verified=True  # Auto-verify admin-created users
-        )
-        
-        db.add(new_user)
-        await db.commit()
-        await db.refresh(new_user)
-        
-        return {
-            "message": "VPN user created successfully",
-            "user_id": new_user.user_id,
-            "email": new_user.email
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(status_code=500, detail=f"VPN user creation failed: {str(e)}")
 
-@router.post("/create-admin-user")
+
+@router.post("/create-admin-user", tags=["Admin - User Management"])
 async def create_admin_user(
     request: CreateAdminUserRequest,
     admin_user = Depends(verify_super_admin_access),

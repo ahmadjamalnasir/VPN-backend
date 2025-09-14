@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from app.core.config import get_settings
 from app.database import engine
-from app.api.v1 import auth, admin_auth, users, subscriptions, vpn, admin, mobile, analytics, health, websocket, user_management
+from app.api.v1 import auth, admin_auth, users, vpn, admin, mobile, analytics, health, websocket, user_management, admin_subscriptions, user_subscriptions, payments, user_status
 from app.middleware.ddos_protection import DDoSProtectionMiddleware, AdvancedRateLimitMiddleware
 from datetime import datetime
 import logging
@@ -66,15 +66,20 @@ app.include_router(admin_auth.router, prefix="/api/v1/admin-auth", tags=["Admin 
 # ADMIN BACKOFFICE ENDPOINTS
 app.include_router(admin.router, prefix="/api/v1/admin")
 app.include_router(user_management.router, prefix="/api/v1/admin")
+app.include_router(admin_subscriptions.router, prefix="/api/v1/admin/subscriptions")
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Admin - Analytics"])
 app.include_router(health.router, prefix="/api/v1/health", tags=["Admin - Health"])
 
 # MOBILE APP ENDPOINTS
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Mobile - Authentication"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Mobile - Users"])
-app.include_router(subscriptions.router, prefix="/api/v1/subscriptions", tags=["Mobile - Subscriptions"])
+app.include_router(payments.router, prefix="/api/v1/payments", tags=["Payments"])
+app.include_router(user_status.router, prefix="/api/v1", tags=["User Status"])
 app.include_router(vpn.router, prefix="/api/v1/vpn", tags=["Mobile - VPN"])
 app.include_router(websocket.router, prefix="/api/v1/websocket", tags=["Mobile - WebSocket"])
+
+# USER SUBSCRIPTIONS
+app.include_router(user_subscriptions.router, prefix="/api/v1/subscriptions")
 
 
 # LEGACY MOBILE ENDPOINTS (for compatibility)
@@ -100,7 +105,8 @@ async def root():
 
             "vpn_users": "/api/v1/admin/vpn-users (list), /api/v1/admin/vpn-user/{id}/status",
             "create_admin_user": "/api/v1/admin/create-admin-user",
-            "subscriptions": "/api/v1/subscriptions/plans",
+            "subscription_plans": "/api/v1/admin/subscriptions/plans",
+            "user_subscriptions": "/api/v1/admin/subscriptions/users",
             "analytics": "/api/v1/analytics",
             "list_servers": "/api/v1/admin/servers",
             "add_server": "/api/v1/admin/add_server",
@@ -112,7 +118,10 @@ async def root():
             "auth": "/api/v1/auth",
             "profile": "/api/v1/users/profile",
             "vpn": "/api/v1/vpn",
-            "subscriptions": "/api/v1/subscriptions/user/plans",
+            "subscription_plans": "/api/v1/subscriptions/plans",
+            "user_subscriptions": "/api/v1/subscriptions/users/{user_id}",
+            "payments": "/api/v1/payments",
+            "user_status": "/api/v1/users/{id}/status",
             "websocket": "/api/v1/websocket/connection"
         }
     }

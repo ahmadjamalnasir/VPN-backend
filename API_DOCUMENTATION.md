@@ -34,9 +34,16 @@ POST /api/v1/vpn/connect?user_id=123                   # Connect to VPN server
 POST /api/v1/vpn/disconnect?connection_id=uuid&user_id=123&bytes_sent=1048576&bytes_received=2097152  # Disconnect with stats
 ```
 
-### User Subscriptions (`/api/v1/subscriptions/user/plans`) - JWT Required
+### User Subscriptions (`/api/v1/subscriptions`) - JWT Required
 ```http
-GET /api/v1/subscriptions/user/plans                   # Get current user's subscription history
+# Public Plans
+GET  /api/v1/subscriptions/plans                     # Get active subscription plans (Public)
+
+# User Subscription Management
+GET  /api/v1/subscriptions/users/{user_id}           # Get user's active subscription
+POST /api/v1/subscriptions/users/{user_id}           # Assign subscription (self-purchase)
+PATCH /api/v1/subscriptions/users/{user_id}/cancel   # Cancel subscription auto-renew
+GET  /api/v1/subscriptions/users/{user_id}/history   # Get subscription history
 ```
 
 ### Real-time Updates (`/api/v1/websocket/connection`) - JWT Required
@@ -86,10 +93,19 @@ PUT  /api/v1/admin/servers/{server_id}               # Update VPN server
 DEL  /api/v1/admin/servers/{server_id}               # Delete VPN server
 ```
 
-### Subscription Management (`/api/v1/subscriptions`) - Admin JWT Required
+### Admin - Subscription Management (`/api/v1/admin/subscriptions`) - Admin JWT Required
 ```http
-GET  /api/v1/subscriptions/plans                       # Get all subscription plans
-POST /api/v1/subscriptions/plans?name=Premium&plan_type=monthly&price=9.99&duration_days=30&is_premium=true  # Create new plan
+# Plan Management
+GET  /api/v1/admin/subscriptions/plans               # Get all subscription plans
+POST /api/v1/admin/subscriptions/plans               # Create new subscription plan
+PUT  /api/v1/admin/subscriptions/plans/{plan_id}     # Update subscription plan
+DEL  /api/v1/admin/subscriptions/plans/{plan_id}     # Deactivate subscription plan
+
+# User Subscription Management
+GET  /api/v1/admin/subscriptions/users/{user_id}           # Get user's active subscription
+POST /api/v1/admin/subscriptions/users/{user_id}           # Assign subscription to user
+PATCH /api/v1/admin/subscriptions/users/{user_id}/cancel   # Cancel user subscription
+GET  /api/v1/admin/subscriptions/users/{user_id}/history   # Get subscription history
 ```
 
 ### Analytics (`/api/v1/analytics`) - Admin/Premium JWT Required

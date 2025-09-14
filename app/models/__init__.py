@@ -4,5 +4,7 @@ from .user_subscription import UserSubscription
 from .vpn_server import VPNServer
 from .connection import Connection
 from .otp_verification import OTPVerification
+from .payment import Payment
+from .vpn_usage_log import VPNUsageLog
 
-__all__ = ["User", "SubscriptionPlan", "UserSubscription", "VPNServer", "Connection", "OTPVerification"]
+__all__ = ["User", "SubscriptionPlan", "UserSubscription", "VPNServer", "Connection", "OTPVerification", "Payment", "VPNUsageLog"]

@@ -31,3 +31,4 @@ class VPNServer(Base):
     
     # Relationships
     connections = relationship("Connection", back_populates="server")
+    usage_logs = relationship("VPNUsageLog", back_populates="server")

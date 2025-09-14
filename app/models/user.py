@@ -24,3 +24,5 @@ class User(Base):
     # Relationships
     user_subscriptions = relationship("UserSubscription", back_populates="user")
     connections = relationship("Connection", back_populates="user")
+    payments = relationship("Payment", back_populates="user")
+    usage_logs = relationship("VPNUsageLog", back_populates="user")

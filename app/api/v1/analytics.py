@@ -3,20 +3,33 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, text
 from app.database import get_db
 from app.models.user import User
+from app.models.admin_user import AdminUser
 from app.models.connection import Connection
 from app.models.vpn_server import VPNServer
 from app.schemas.analytics import *
 from app.services.auth import verify_token
 from datetime import datetime, timedelta
 from typing import List
+from uuid import UUID
 
 router = APIRouter()
 
 async def verify_admin_or_premium(current_user_id: str = Depends(verify_token), db: AsyncSession = Depends(get_db)):
     """Verify user has admin or premium access"""
+    # Check if admin user
+    try:
+        admin_uuid = UUID(current_user_id)
+        admin_result = await db.execute(select(AdminUser).where(AdminUser.id == admin_uuid))
+        admin_user = admin_result.scalar_one_or_none()
+        if admin_user:
+            return admin_user
+    except ValueError:
+        pass
+    
+    # Check if premium user
     result = await db.execute(select(User).where(User.id == current_user_id))
     user = result.scalar_one_or_none()
-    if not user or (not user.is_superuser and not user.is_premium):
+    if not user or not user.is_premium:
         raise HTTPException(status_code=403, detail="Premium or admin access required")
     return user
 

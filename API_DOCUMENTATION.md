@@ -355,7 +355,6 @@ DEL /api/v1/admin/servers/{id}        # ✅ Full access
     "country": "US",
     "is_active": true,
     "is_premium": false,
-    "is_superuser": false,
     "is_email_verified": true,
     "created_at": "2024-01-15T10:30:00Z"
   }

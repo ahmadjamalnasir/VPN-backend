@@ -4,6 +4,7 @@ from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models.user import User
+from app.models.admin_user import AdminUser
 from app.models.vpn_server import VPNServer
 from app.models.connection import Connection
 from app.schemas.vpn import VPNServerResponse, VPNConnectRequest, VPNConnectionResponse, VPNDisconnectResponse
@@ -212,10 +213,14 @@ async def get_all_vpn_servers(
 ):
     """Get all VPN servers for admin management (Admin only)"""
     # Verify admin access
-    user_result = await db.execute(select(User).where(User.id == current_user_id))
-    user = user_result.scalar_one_or_none()
-    if not user or not user.is_superuser:
-        raise HTTPException(status_code=403, detail="Admin access required")
+    try:
+        admin_uuid = UUID(current_user_id)
+        admin_result = await db.execute(select(AdminUser).where(AdminUser.id == admin_uuid))
+        admin_user = admin_result.scalar_one_or_none()
+        if not admin_user:
+            raise HTTPException(status_code=403, detail="Admin access required")
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Invalid admin token")
     
     result = await db.execute(
         select(VPNServer)

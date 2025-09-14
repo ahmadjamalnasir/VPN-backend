@@ -17,7 +17,6 @@ class UserCreate(BaseModel):
     phone: Optional[str] = None
     country: Optional[str] = None
     is_premium: bool = False
-    is_superuser: bool = False
 
 class UserResponse(BaseModel):
     id: UUID
@@ -28,7 +27,6 @@ class UserResponse(BaseModel):
     country: Optional[str]
     is_active: bool
     is_premium: bool
-    is_superuser: bool
     is_email_verified: bool
     created_at: datetime
     

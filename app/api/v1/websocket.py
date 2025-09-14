@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 from app.database import get_db
 from app.models.user import User
+from app.models.admin_user import AdminUser
 from app.models.connection import Connection
 from app.models.vpn_server import VPNServer
 from app.services.auth import verify_token
@@ -11,6 +12,7 @@ import json
 import asyncio
 from typing import Dict, Set
 import logging
+from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +76,7 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-async def verify_websocket_token(token: str, db: AsyncSession) -> User:
+async def verify_websocket_token(token: str, db: AsyncSession):
     """Verify JWT token for WebSocket connection"""
     try:
         from jose import jwt, JWTError
@@ -87,6 +89,17 @@ async def verify_websocket_token(token: str, db: AsyncSession) -> User:
         if user_id is None:
             raise HTTPException(status_code=401, detail="Invalid token")
         
+        # Try admin user first
+        try:
+            admin_uuid = UUID(user_id)
+            admin_result = await db.execute(select(AdminUser).where(AdminUser.id == admin_uuid))
+            admin_user = admin_result.scalar_one_or_none()
+            if admin_user:
+                return admin_user
+        except ValueError:
+            pass
+        
+        # Try regular user
         result = await db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
         if not user:
@@ -143,7 +156,7 @@ async def websocket_admin_dashboard(
     try:
         # Verify admin token
         user = await verify_websocket_token(token, db)
-        if not user.is_superuser:
+        if not isinstance(user, AdminUser):
             await websocket.close(code=1008, reason="Admin access required")
             return
         

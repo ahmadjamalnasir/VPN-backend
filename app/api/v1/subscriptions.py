@@ -3,12 +3,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db
 from app.models.user import User
+from app.models.admin_user import AdminUser
 from app.models.subscription_plan import SubscriptionPlan
 from app.models.user_subscription import UserSubscription
 from app.schemas.subscription import *
 from app.services.auth import verify_token
 from datetime import datetime, timedelta
 from typing import List
+from uuid import UUID
 
 router = APIRouter()
 
@@ -41,10 +43,14 @@ async def create_subscription_plan(
 ):
     """Create new subscription plan (Admin only)"""
     # Verify admin access
-    user_result = await db.execute(select(User).where(User.id == current_user_id))
-    user = user_result.scalar_one_or_none()
-    if not user or not user.is_superuser:
-        raise HTTPException(status_code=403, detail="Admin access required")
+    try:
+        admin_uuid = UUID(current_user_id)
+        admin_result = await db.execute(select(AdminUser).where(AdminUser.id == admin_uuid))
+        admin_user = admin_result.scalar_one_or_none()
+        if not admin_user:
+            raise HTTPException(status_code=403, detail="Admin access required")
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Invalid admin token")
     
     plan = SubscriptionPlan(
         name=name,
@@ -66,10 +72,14 @@ async def get_subscription_plans(
 ):
     """Get all available subscription plans (Admin only)"""
     # Verify admin access
-    user_result = await db.execute(select(User).where(User.id == current_user_id))
-    user = user_result.scalar_one_or_none()
-    if not user or not user.is_superuser:
-        raise HTTPException(status_code=403, detail="Admin access required")
+    try:
+        admin_uuid = UUID(current_user_id)
+        admin_result = await db.execute(select(AdminUser).where(AdminUser.id == admin_uuid))
+        admin_user = admin_result.scalar_one_or_none()
+        if not admin_user:
+            raise HTTPException(status_code=403, detail="Admin access required")
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Invalid admin token")
     
     result = await db.execute(select(SubscriptionPlan).order_by(SubscriptionPlan.price))
     plans = result.scalars().all()
@@ -90,10 +100,15 @@ async def get_user_subscription_history(
         raise HTTPException(status_code=404, detail="User not found")
     
     # Verify access (own data or admin)
-    requesting_user = await db.execute(select(User).where(User.id == current_user_id))
-    requesting_user = requesting_user.scalar_one_or_none()
-    if str(user.id) != current_user_id and not requesting_user.is_superuser:
-        raise HTTPException(status_code=403, detail="Access denied")
+    if str(user.id) != current_user_id:
+        try:
+            admin_uuid = UUID(current_user_id)
+            admin_result = await db.execute(select(AdminUser).where(AdminUser.id == admin_uuid))
+            admin_user = admin_result.scalar_one_or_none()
+            if not admin_user:
+                raise HTTPException(status_code=403, detail="Access denied")
+        except ValueError:
+            raise HTTPException(status_code=403, detail="Access denied")
     
     # Get subscription history
     result = await db.execute(
@@ -121,10 +136,15 @@ async def assign_subscription(
         raise HTTPException(status_code=404, detail="User not found")
     
     # Verify access (user can assign to themselves or admin)
-    requesting_user = await db.execute(select(User).where(User.id == current_user_id))
-    requesting_user = requesting_user.scalar_one_or_none()
-    if str(user.id) != current_user_id and not requesting_user.is_superuser:
-        raise HTTPException(status_code=403, detail="Access denied")
+    if str(user.id) != current_user_id:
+        try:
+            admin_uuid = UUID(current_user_id)
+            admin_result = await db.execute(select(AdminUser).where(AdminUser.id == admin_uuid))
+            admin_user = admin_result.scalar_one_or_none()
+            if not admin_user:
+                raise HTTPException(status_code=403, detail="Access denied")
+        except ValueError:
+            raise HTTPException(status_code=403, detail="Access denied")
     
     # Find plan by readable plan_id
     plan_result = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.plan_id == plan_id))
@@ -177,10 +197,15 @@ async def cancel_subscription(
         raise HTTPException(status_code=404, detail="User not found")
     
     # Verify access (own data or admin)
-    requesting_user = await db.execute(select(User).where(User.id == current_user_id))
-    requesting_user = requesting_user.scalar_one_or_none()
-    if str(user.id) != current_user_id and not requesting_user.is_superuser:
-        raise HTTPException(status_code=403, detail="Access denied")
+    if str(user.id) != current_user_id:
+        try:
+            admin_uuid = UUID(current_user_id)
+            admin_result = await db.execute(select(AdminUser).where(AdminUser.id == admin_uuid))
+            admin_user = admin_result.scalar_one_or_none()
+            if not admin_user:
+                raise HTTPException(status_code=403, detail="Access denied")
+        except ValueError:
+            raise HTTPException(status_code=403, detail="Access denied")
     
     # Cancel active subscription
     result = await db.execute(

@@ -21,7 +21,6 @@ class AdminUserResponse(BaseModel):
     country: Optional[str]
     is_active: bool
     is_premium: bool
-    is_superuser: bool
     is_email_verified: bool
     created_at: datetime
     
@@ -31,7 +30,6 @@ class AdminUserResponse(BaseModel):
 class AdminUserUpdateRequest(BaseModel):
     is_active: Optional[bool] = None
     is_premium: Optional[bool] = None
-    is_superuser: Optional[bool] = None
 
 class CreateVPNServerRequest(BaseModel):
     hostname: str

@@ -250,7 +250,7 @@ python3 create_admin_user.py
 
 #### Mobile-Optimized APIs:
 - Minimal response payloads for mobile networks
-- Premium status filtering for server lists
+- All users can view all servers (premium check at connection time)
 - Real-time connection status via WebSocket
 
 #### Admin Management APIs:

@@ -117,7 +117,9 @@ async def root():
         "mobile_endpoints": {
             "auth": "/api/v1/auth",
             "profile": "/api/v1/users/profile",
-            "vpn": "/api/v1/vpn",
+            "vpn_servers": "/api/v1/vpn/servers",
+            "vpn_connect": "/api/v1/vpn/connect",
+            "vpn_disconnect": "/api/v1/vpn/disconnect",
             "subscription_plans": "/api/v1/subscriptions/plans",
             "user_subscriptions": "/api/v1/subscriptions/users/{user_id}",
             "payments": "/api/v1/payments",

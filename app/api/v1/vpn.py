@@ -17,35 +17,7 @@ import secrets
 
 router = APIRouter()
 
-# MOBILE & SHARED ENDPOINTS
-@router.get("/", response_model=List[VPNServerResponse])
-async def get_vpn_servers(
-    location: Optional[str] = Query(None, description="Filter by location"),
-    is_premium: Optional[bool] = Query(None, description="Filter by premium status"),
-    current_user_id: str = Depends(verify_token),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get available VPN servers (Mobile & Admin)"""
-    # Get user to check premium status
-    user_result = await db.execute(select(User).where(User.id == current_user_id))
-    user = user_result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    query = select(VPNServer).where(VPNServer.status == "active")
-    
-    if location:
-        query = query.where(VPNServer.location == location)
-    
-    if is_premium is not None:
-        query = query.where(VPNServer.is_premium == is_premium)
-    elif not user.is_premium:
-        # Non-premium users only see free servers
-        query = query.where(VPNServer.is_premium == False)
-    
-    result = await db.execute(query.order_by(VPNServer.current_load, VPNServer.ping))
-    servers = result.scalars().all()
-    return servers
+# MOBILE ENDPOINTS
 
 @router.post("/connect", response_model=VPNConnectionResponse)
 async def connect_vpn(
@@ -86,8 +58,7 @@ async def connect_vpn(
         query = select(VPNServer).where(VPNServer.status == "active")
         if request.location:
             query = query.where(VPNServer.location == request.location)
-        if not user.is_premium:
-            query = query.where(VPNServer.is_premium == False)
+        # Allow auto-selection from all servers (premium check happens below)
         
         server_result = await db.execute(query.order_by(VPNServer.current_load).limit(1))
         server = server_result.scalar_one_or_none()
@@ -96,7 +67,10 @@ async def connect_vpn(
     
     # Check premium access
     if server.is_premium and not user.is_premium:
-        raise HTTPException(status_code=403, detail="Premium subscription required")
+        raise HTTPException(
+            status_code=403, 
+            detail="Upgrade to Premium required to access this server. Visit your account settings to upgrade."
+        )
     
     # Generate client configuration
     client_ip = f"10.0.{secrets.randbelow(255)}.{secrets.randbelow(254) + 1}"
@@ -203,30 +177,45 @@ async def disconnect_vpn(
         total_bytes=bytes_sent + bytes_received
     )
 
-# ADMIN ENDPOINTS
-@router.get("/servers", response_model=List[VPNServerResponse])
-async def get_all_vpn_servers(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, le=1000),
+# MOBILE ENDPOINTS
+@router.get("/servers", response_model=List[VPNServerResponse], tags=["Mobile - VPN"])
+async def get_vpn_servers(
+    location: Optional[str] = Query(None, description="Filter by location"),
+    is_premium: Optional[bool] = Query(None, description="Filter by premium status"),
+    max_load: Optional[float] = Query(None, ge=0.0, le=1.0, description="Maximum server load (0.0-1.0)"),
+    max_ping: Optional[int] = Query(None, ge=0, description="Maximum ping in milliseconds"),
+    skip: int = Query(0, ge=0, description="Skip records for pagination"),
+    limit: int = Query(100, ge=1, le=1000, description="Limit records for pagination"),
     current_user_id: str = Depends(verify_token),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get all VPN servers for admin management (Admin only)"""
-    # Verify admin access
-    try:
-        admin_uuid = UUID(current_user_id)
-        admin_result = await db.execute(select(AdminUser).where(AdminUser.id == admin_uuid))
-        admin_user = admin_result.scalar_one_or_none()
-        if not admin_user:
-            raise HTTPException(status_code=403, detail="Admin access required")
-    except ValueError:
-        raise HTTPException(status_code=403, detail="Invalid admin token")
+    """Get VPN servers with filtering (Mobile)"""
+    # Get user to check premium status
+    user_result = await db.execute(select(User).where(User.id == current_user_id))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
     
-    result = await db.execute(
-        select(VPNServer)
-        .offset(skip)
-        .limit(limit)
-        .order_by(VPNServer.created_at.desc())
-    )
+    # Build query - only active servers for mobile users
+    query = select(VPNServer).where(VPNServer.status == "active")
+    
+    # Apply filters
+    if location:
+        query = query.where(VPNServer.location.ilike(f"%{location}%"))
+    
+    if is_premium is not None:
+        query = query.where(VPNServer.is_premium == is_premium)
+    # Allow all users to view all servers (premium check happens at connection time)
+    
+    if max_load is not None:
+        query = query.where(VPNServer.current_load <= max_load)
+    
+    if max_ping is not None:
+        query = query.where(VPNServer.ping <= max_ping)
+    
+    # Apply pagination and ordering by performance
+    query = query.offset(skip).limit(limit).order_by(VPNServer.current_load, VPNServer.ping)
+    
+    result = await db.execute(query)
     servers = result.scalars().all()
     return servers

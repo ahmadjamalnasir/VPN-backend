@@ -29,8 +29,8 @@ GET /api/v1/users/profile            # Get mobile-optimized user profile
 
 ### VPN Management (`/api/v1/vpn`) - JWT Required
 ```http
-GET  /api/v1/vpn/?location=us-east&is_premium=false    # Get available servers (filtered by user premium status)
-POST /api/v1/vpn/connect?user_id=123                   # Connect to VPN server
+GET  /api/v1/vpn/servers?location=us-east&max_load=0.7&max_ping=50  # Get all servers (premium check at connection)
+POST /api/v1/vpn/connect?user_id=123                                # Connect to VPN server (premium check enforced)
 POST /api/v1/vpn/disconnect?connection_id=uuid&user_id=123&bytes_sent=1048576&bytes_received=2097152  # Disconnect with stats
 ```
 
@@ -215,7 +215,7 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
 }
 ```
 
-### Mobile VPN Server List
+### Mobile VPN Server List (All Users See All Servers)
 ```json
 [
   {
@@ -227,6 +227,17 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
     "current_load": 0.25,
     "ping": 15,
     "is_premium": false,
+    "created_at": "2024-01-15T10:30:00Z"
+  },
+  {
+    "id": "uuid",
+    "hostname": "vpn-premium-eu-1",
+    "location": "eu-west",
+    "ip_address": "203.0.113.2",
+    "status": "active",
+    "current_load": 0.15,
+    "ping": 25,
+    "is_premium": true,
     "created_at": "2024-01-15T10:30:00Z"
   }
 ]
@@ -535,8 +546,8 @@ X-RateLimit-Reset: 1642248600
 1. **Authentication Flow**: Implement signup → verify email → login → store JWT token
 2. **Profile Management**: Use `/users/profile` for user info with subscription status
 3. **VPN Connection**: Use `/vpn/connect` and `/vpn/disconnect` with real-time status via WebSocket
-4. **Server Selection**: Filter servers by location and premium status automatically
-5. **Error Handling**: Handle 403 errors for premium features gracefully
+4. **Server Selection**: All users see all servers, premium check happens at connection time
+5. **Error Handling**: Handle 403 "Upgrade to Premium required" errors with upgrade prompts
 
 ### Admin Panel Integration
 1. **Dashboard**: Use WebSocket `/websocket/admin-dashboard` for real-time updates

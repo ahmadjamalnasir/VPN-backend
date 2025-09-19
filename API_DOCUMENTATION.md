@@ -32,6 +32,7 @@ GET /api/v1/users/profile            # Get mobile-optimized user profile
 GET  /api/v1/vpn/servers?location=us-east&max_load=0.7&max_ping=50  # Get all servers (premium check at connection)
 POST /api/v1/vpn/connect?user_id=123                                # Connect to VPN server (premium check enforced)
 POST /api/v1/vpn/disconnect?connection_id=uuid&user_id=123&bytes_sent=1048576&bytes_received=2097152  # Disconnect with stats
+GET  /api/v1/vpn/status?connection_id=uuid&user_id=123              # Get connection status with metrics
 ```
 
 ### User Subscriptions (`/api/v1/subscriptions`) - JWT Required
@@ -258,6 +259,32 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
   "wg_config": "[Interface]\nPrivateKey = <client_private_key>\nAddress = 10.0.123.45/32\nDNS = 1.1.1.1, 1.0.0.1\n\n[Peer]\nPublicKey = <server_public_key>\nEndpoint = 203.0.113.1:51820\nAllowedIPs = 0.0.0.0/0\nPersistentKeepalive = 25",
   "started_at": "2024-01-15T10:30:00Z",
   "status": "connected"
+}
+```
+
+### Mobile VPN Status Response
+```json
+{
+  "connection_id": "uuid",
+  "status": "connected",
+  "server": {
+    "id": "uuid",
+    "hostname": "vpn-us-east-1",
+    "location": "us-east",
+    "ip_address": "203.0.113.1",
+    "is_premium": false
+  },
+  "client_ip": "10.0.123.45",
+  "started_at": "2024-01-15T10:30:00Z",
+  "ended_at": null,
+  "duration_seconds": 3600,
+  "bytes_sent": 1048576,
+  "bytes_received": 2097152,
+  "total_bytes": 3145728,
+  "connection_speed_mbps": 6.99,
+  "server_load": 0.35,
+  "ping_ms": 15,
+  "is_active": true
 }
 ```
 
@@ -545,7 +572,7 @@ X-RateLimit-Reset: 1642248600
 ### Mobile App Integration
 1. **Authentication Flow**: Implement signup → verify email → login → store JWT token
 2. **Profile Management**: Use `/users/profile` for user info with subscription status
-3. **VPN Connection**: Use `/vpn/connect` and `/vpn/disconnect` with real-time status via WebSocket
+3. **VPN Connection**: Use `/vpn/connect`, `/vpn/disconnect`, and `/vpn/status` with real-time status via WebSocket
 4. **Server Selection**: All users see all servers, premium check happens at connection time
 5. **Error Handling**: Handle 403 "Upgrade to Premium required" errors with upgrade prompts
 

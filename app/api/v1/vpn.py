@@ -7,7 +7,7 @@ from app.models.user import User
 from app.models.admin_user import AdminUser
 from app.models.vpn_server import VPNServer
 from app.models.connection import Connection
-from app.schemas.vpn import VPNServerResponse, VPNConnectRequest, VPNConnectionResponse, VPNDisconnectResponse
+from app.schemas.vpn import VPNServerResponse, VPNConnectRequest, VPNConnectionResponse, VPNDisconnectResponse, VPNStatusResponse
 from app.services.auth import verify_token
 from app.services.vpn_service import generate_wireguard_keys
 from datetime import datetime
@@ -219,3 +219,75 @@ async def get_vpn_servers(
     result = await db.execute(query)
     servers = result.scalars().all()
     return servers
+
+@router.get("/status", response_model=VPNStatusResponse, tags=["Mobile - VPN"])
+async def get_vpn_status(
+    connection_id: Optional[UUID] = Query(None, description="Connection ID"),
+    user_id: int = Query(..., description="User ID"),
+    current_user_id: str = Depends(verify_token),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get VPN connection status (Mobile)"""
+    # Find user
+    user_result = await db.execute(select(User).where(User.user_id == user_id))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify user can access status (own connection only)
+    if str(user.id) != current_user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Find connection - either by connection_id or latest active connection
+    if connection_id:
+        query = select(Connection).options(selectinload(Connection.server)).where(
+            and_(Connection.id == connection_id, Connection.user_id == user.id)
+        )
+    else:
+        # Get latest connection for user
+        query = select(Connection).options(selectinload(Connection.server)).where(
+            Connection.user_id == user.id
+        ).order_by(Connection.started_at.desc()).limit(1)
+    
+    result = await db.execute(query)
+    connection = result.scalar_one_or_none()
+    if not connection:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    
+    # Calculate metrics
+    now = datetime.utcnow()
+    if connection.status == "connected":
+        duration = int((now - connection.started_at).total_seconds())
+        is_active = True
+        ended_at = None
+    else:
+        duration = connection.duration_seconds or 0
+        is_active = False
+        ended_at = connection.ended_at
+    
+    # Calculate connection speed (MB/s to Mbps)
+    total_bytes = (connection.bytes_sent or 0) + (connection.bytes_received or 0)
+    speed_mbps = (total_bytes * 8 / (1024 * 1024)) / max(duration, 1) if duration > 0 else 0.0
+    
+    return VPNStatusResponse(
+        connection_id=connection.id,
+        status=connection.status,
+        server={
+            "id": connection.server.id,
+            "hostname": connection.server.hostname,
+            "location": connection.server.location,
+            "ip_address": connection.server.ip_address,
+            "is_premium": connection.server.is_premium
+        },
+        client_ip=connection.client_ip,
+        started_at=connection.started_at,
+        ended_at=ended_at,
+        duration_seconds=duration,
+        bytes_sent=connection.bytes_sent or 0,
+        bytes_received=connection.bytes_received or 0,
+        total_bytes=total_bytes,
+        connection_speed_mbps=round(speed_mbps, 2),
+        server_load=connection.server.current_load,
+        ping_ms=connection.server.ping,
+        is_active=is_active
+    )

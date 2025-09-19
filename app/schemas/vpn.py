@@ -35,6 +35,24 @@ class VPNDisconnectRequest(BaseModel):
     bytes_received: int = 0
 
 class VPNDisconnectResponse(BaseModel):
-    connection_id: UUID
-    session_stats: dict
     message: str
+    duration_seconds: int
+    bytes_sent: int
+    bytes_received: int
+    total_bytes: int
+
+class VPNStatusResponse(BaseModel):
+    connection_id: UUID
+    status: str  # connected, disconnected, connecting
+    server: dict
+    client_ip: str
+    started_at: datetime
+    ended_at: Optional[datetime] = None
+    duration_seconds: int
+    bytes_sent: int
+    bytes_received: int
+    total_bytes: int
+    connection_speed_mbps: float
+    server_load: float
+    ping_ms: int
+    is_active: bool

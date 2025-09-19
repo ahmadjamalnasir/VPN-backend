@@ -15,6 +15,35 @@ A production-ready VPN backend API with comprehensive admin panel, mobile optimi
 - 🔌 **WebSocket Support** for real-time updates
 - 📈 **Health Monitoring** with system metrics & alerts
 
+## 🗄️ Database Structure
+
+### Core Tables & Relationships
+
+```sql
+-- User Management (Separate Systems)
+users (UUID id, int user_id, email, is_premium, ...)
+admin_users (UUID id, username, role, ...)
+
+-- Subscription System (4-Table Structure)
+subscription_plans (UUID id, int plan_id, name, price_usd, duration_days, features JSONB, status)
+user_subscriptions (UUID id, user_id FK→users.id, plan_id FK→subscription_plans.id, status, auto_renew)
+payments (UUID id, user_id FK→users.id, subscription_id FK→user_subscriptions.id, amount_usd, status)
+vpn_usage_logs (UUID id, user_id FK→users.id, server_id FK→vpn_servers.id, data_used_mb)
+
+-- VPN Infrastructure
+vpn_servers (UUID id, hostname, location, endpoint, public_key, is_premium, status, current_load)
+connections (UUID id, user_id FK→users.id, server_id FK→vpn_servers.id, client_ip, status, bytes_sent/received)
+otp_verification (UUID id, email, otp_code, purpose, expires_at)
+```
+
+### Key Relationships
+- **Users ↔ Subscriptions**: One-to-many (users.id ← user_subscriptions.user_id)
+- **Plans ↔ Subscriptions**: One-to-many (subscription_plans.id ← user_subscriptions.plan_id)
+- **Subscriptions ↔ Payments**: One-to-many (user_subscriptions.id ← payments.subscription_id)
+- **Users ↔ Connections**: One-to-many (users.id ← connections.user_id)
+- **Servers ↔ Connections**: One-to-many (vpn_servers.id ← connections.server_id)
+- **Users ↔ Usage Logs**: One-to-many (users.id ← vpn_usage_logs.user_id)
+
 ## 🏗️ Architecture Overview
 
 ```
@@ -24,31 +53,17 @@ VPN-backend/
 │   │   ├── auth.py          # Mobile: Authentication & OTP
 │   │   ├── admin_auth.py    # Admin: Separate admin authentication
 │   │   ├── users.py         # Mobile: /profile | Admin: /list, /by-id, /status
-│   │   ├── subscriptions.py # Mobile: /user/plans | Admin: /plans
-│   │   ├── vpn.py          # Mobile: /connect, /disconnect | Admin: /servers
+│   │   ├── user_subscriptions.py # Mobile: /user/plans | Admin: /plans
+│   │   ├── admin_subscriptions.py # Admin: Full subscription management
+│   │   ├── payments.py      # Payment processing & webhooks
+│   │   ├── vpn.py          # Mobile: /servers, /connect, /disconnect, /status
 │   │   ├── admin.py        # Admin: Dashboard & server management
-│   │   ├── mobile.py       # Legacy mobile endpoints
 │   │   ├── analytics.py    # Admin/Premium: Usage analytics & metrics
 │   │   ├── health.py       # Admin: System health monitoring
 │   │   └── websocket.py    # Mobile: /connection | Admin: /admin-dashboard
-│   ├── models/             # Database models
-│   │   ├── user.py         # User with readable ID & premium status
-│   │   ├── admin_user.py   # Separate admin users with role-based access
-│   │   ├── subscription_plan.py    # Independent subscription plans
-│   │   ├── user_subscription.py    # User-plan assignments
-│   │   ├── vpn_server.py          # VPN servers with premium flag
-│   │   ├── connection.py          # Connection tracking with stats
-│   │   └── otp_verification.py    # Email verification & password reset
+│   ├── models/             # Database models (8 core tables)
 │   ├── schemas/            # Pydantic request/response models
-│   ├── services/           # Business logic & external services (CLEANED)
-│   │   ├── auth.py         # JWT & password services
-│   │   ├── otp_service.py  # Email verification
-│   │   ├── payment.py      # Stripe integration
-│   │   ├── vpn_service.py  # VPN server management
-│   │   ├── metrics_service.py # Real-time metrics
-│   │   ├── rate_limit_service.py # Advanced rate limiting
-│   │   ├── redis_service.py # Redis operations
-│   │   └── wireguard_service.py # WireGuard integration
+│   ├── services/           # Business logic & external services
 │   ├── middleware/         # Security middleware (DDoS, rate limiting)
 │   ├── utils/             # Security utilities & helpers
 │   ├── core/              # Configuration & settings
@@ -58,12 +73,72 @@ VPN-backend/
 └── API_DOCUMENTATION.md   # Complete API reference
 ```
 
+## ⚠️ CRITICAL PRODUCTION UPDATES REQUIRED
 
-### **Impact of Removals:**
-- ✅ **No Functionality Lost** - All features migrated to role-based system
-- ✅ **Improved Security** - Proper role checking on all endpoints
-- ✅ **Better Performance** - Single async system with optimized queries
-- ✅ **Cleaner Architecture** - Clear separation between mobile and admin APIs
+### 🔑 Security Configuration
+
+#### 1. JWT Security (`app/core/config.py`)
+```python
+# CHANGE THIS PLACEHOLDER:
+JWT_SECRET: str = "your-secret-key-change-in-production"
+# TO: Strong random secret
+JWT_SECRET: str = "your-actual-256-bit-secret-key"  # Use: openssl rand -hex 32
+```
+
+#### 2. Database Configuration (`.env`)
+```env
+# CHANGE PLACEHOLDER:
+DATABASE_URL="postgresql+asyncpg://username:password@localhost:5432/primevpn"
+# TO: Production credentials
+DATABASE_URL="postgresql+asyncpg://prod_user:secure_password@prod-db:5432/primevpn"
+```
+
+#### 3. Payment Provider Integration (`app/services/payment.py`)
+```python
+# REPLACE ENTIRE FILE WITH PROVIDER INTEGRATION:
+# Current: Placeholder functions
+# Required: Real Stripe/PayPal/Razorpay SDK integration
+
+# Environment Variables Required:
+STRIPE_SECRET_KEY="sk_live_your_actual_key"  # Not placeholder
+STRIPE_WEBHOOK_SECRET="whsec_your_actual_secret"  # Not placeholder
+
+# Webhook URL to configure in provider dashboard:
+# https://yourdomain.com/api/v1/payments/callback
+```
+
+#### 4. Email Service (`app/services/otp_service.py`)
+```python
+# REPLACE MOCK IMPLEMENTATION:
+async def send_otp_email(email: str, otp_code: str, purpose: str):
+    # TODO: Implement actual email service (SMTP/SendGrid/AWS SES)
+    pass  # Currently just logs - NO EMAILS SENT
+```
+
+#### 5. WireGuard Integration (`app/services/wireguard_service.py`)
+```python
+# REPLACE PLACEHOLDER IMPLEMENTATION:
+def generate_wireguard_keys():
+    # TODO: Use actual WireGuard key generation library
+    private_key = os.urandom(32).hex()  # PLACEHOLDER - NOT REAL KEYS
+    public_key = os.urandom(32).hex()   # PLACEHOLDER - NOT REAL KEYS
+    return private_key, public_key
+```
+
+#### 6. CORS Origins (`app/core/config.py`)
+```python
+# UPDATE FOR PRODUCTION:
+ALLOWED_ORIGINS: List[str] = ["https://your-mobile-app.com", "https://admin.your-domain.com"]
+ALLOWED_HOSTS: List[str] = ["your-domain.com", "api.your-domain.com"]
+```
+
+### 🛡️ Security Features (Already Implemented)
+- ✅ **DDoS Protection**: Multi-layer with IP banning
+- ✅ **Rate Limiting**: Endpoint-specific with burst allowance
+- ✅ **Input Sanitization**: Log injection prevention
+- ✅ **SQL Injection Protection**: Parameterized queries
+- ✅ **Authentication Security**: JWT with bcrypt password hashing
+- ✅ **Role-Based Access**: Admin/User separation with proper verification
 
 ## 🔧 Step-by-Step Setup Guide
 
@@ -120,7 +195,7 @@ REDIS_URL="redis://localhost:6379"
 ALLOWED_ORIGINS=["http://localhost:3000","https://yourdomain.com"]
 ALLOWED_HOSTS=["localhost","127.0.0.1","yourdomain.com"]
 
-# Stripe Payment
+# Payment Provider (UPDATE WITH REAL KEYS)
 STRIPE_SECRET_KEY="sk_live_your_stripe_secret_key"
 STRIPE_PUBLISHABLE_KEY="pk_live_your_stripe_publishable_key"
 STRIPE_WEBHOOK_SECRET="whsec_your_webhook_secret"
@@ -151,78 +226,6 @@ python start_server.py
 # API docs: http://localhost:8000/docs
 ```
 
-## 🔑 Critical Production Placeholders
-
-### ⚠️ MUST UPDATE BEFORE PRODUCTION:
-
-#### 1. JWT Security (`app/core/config.py`)
-```python
-# CHANGE THIS:
-JWT_SECRET: str = "your-secret-key-change-in-production"
-# TO: Strong random secret (use: openssl rand -hex 32)
-JWT_SECRET: str = "your-actual-256-bit-secret-key"
-```
-
-#### 2. Database Configuration (`.env`)
-```env
-# CHANGE THIS:
-DATABASE_URL="postgresql+asyncpg://username:password@localhost:5432/primevpn"
-# TO: Production database credentials
-DATABASE_URL="postgresql+asyncpg://prod_user:secure_password@prod-db:5432/primevpn"
-```
-
-#### 3. Stripe Payment Keys (`.env`)
-```env
-# CHANGE THESE TEST KEYS:
-STRIPE_SECRET_KEY="sk_test_your_stripe_secret_key"
-STRIPE_PUBLISHABLE_KEY="pk_test_your_stripe_publishable_key"
-# TO: Live Stripe keys
-STRIPE_SECRET_KEY="sk_live_actual_secret_key"
-STRIPE_PUBLISHABLE_KEY="pk_live_actual_publishable_key"
-```
-
-#### 4. CORS Origins (`app/core/config.py`)
-```python
-# CHANGE THIS:
-ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "https://yourdomain.com"]
-# TO: Your actual domains
-ALLOWED_ORIGINS: List[str] = ["https://your-mobile-app.com", "https://admin.your-domain.com"]
-```
-
-#### 5. Email Service (`app/services/otp_service.py`)
-```python
-# IMPLEMENT ACTUAL EMAIL SERVICE:
-# Replace mock email sending with real SMTP/SendGrid/AWS SES
-async def send_otp_email(email: str, otp_code: str, purpose: str):
-    # TODO: Implement actual email service
-    pass
-```
-
-#### 6. WireGuard Keys (`app/services/wireguard_service.py`)
-```python
-# REPLACE PLACEHOLDER:
-def generate_wireguard_keys():
-    # TODO: Use actual WireGuard key generation
-    private_key = os.urandom(32).hex()  # PLACEHOLDER
-    public_key = os.urandom(32).hex()   # PLACEHOLDER
-    return private_key, public_key
-```
-
-#### 7. Admin User Creation
-```bash
-# Create separate admin user (recommended approach):
-python3 create_admin_user.py
-
-# Default super admin credentials:
-# Username: admin
-# Password: admin123
-# Email: admin@primevpn.com
-# Role: SUPER_ADMIN (full access)
-
-# Create additional admin users via API:
-# POST /api/v1/admin/create-admin-user (Super Admin only)
-```
-
 ## 📚 Understanding the Application
 
 ### Role-Based API Architecture (v2.0.0):
@@ -249,9 +252,10 @@ python3 create_admin_user.py
 - JWT tokens with role verification on all protected endpoints
 
 #### Mobile-Optimized APIs:
-- Minimal response payloads for mobile networks
-- All users can view all servers (premium check at connection time)
-- Real-time connection status via WebSocket
+- **Server Visibility**: All users can view all servers (premium check at connection time)
+- **Minimal Payloads**: Optimized response sizes for mobile networks
+- **Real-time Updates**: WebSocket connection status and metrics
+- **Premium Enforcement**: Clear upgrade prompts for premium server access
 
 #### Admin Management APIs:
 - Comprehensive user management with search/pagination
@@ -274,21 +278,21 @@ python3 create_admin_user.py
   - Basic user lists and analytics
   - Limited dashboard access
 
-## 🚀 Production Deployment Checklist
-
-- [ ] Update JWT secret key
-- [ ] Configure production database
-- [ ] Set up Redis cluster
-- [ ] Update Stripe live keys
-- [ ] Implement email service
-- [ ] Configure CORS origins for mobile app and admin panel
-- [ ] Set up SSL certificates
-- [ ] Create admin user
+## 📋 Production Deployment Checklist
+- [ ] Update JWT secret key (256-bit random)
+- [ ] Configure production database with SSL
+- [ ] Set up Redis cluster for rate limiting
+- [ ] Integrate real payment provider (Stripe/PayPal)
+- [ ] Implement email service (SMTP/SendGrid/AWS SES)
+- [ ] Replace WireGuard key generation with real library
+- [ ] Update CORS origins for mobile app and admin panel
+- [ ] Set up SSL certificates and HTTPS
+- [ ] Create admin user: `python create_admin_user.py`
 - [ ] Configure monitoring and alerts
-- [ ] Set up backup strategy
-- [ ] Replace WireGuard key placeholders
+- [ ] Set up automated backups
 - [ ] Test mobile app integration
 - [ ] Test admin panel integration
+- [ ] Configure payment provider webhooks
 
 ## 📖 API Documentation
 
@@ -337,9 +341,29 @@ The client needs these essential details for VPN connection:
 - All above parameters can be updated (all optional)
 - `current_load` - Only shown in server listing (read-only, not editable)
 
-## 🔒 Security
+## 🔒 Security Implementation
 
-Security implementation with role-based access control: [SECURITY.md](SECURITY.md)
+### ✅ Security Measures Active
+- **Package Security**: All vulnerabilities fixed, updated to latest secure versions
+- **Log Injection Prevention**: All user inputs sanitized before logging
+- **Input Validation**: Email, IP address, and identifier validation across all endpoints
+- **SQL Injection Protection**: Parameterized queries and type checking
+- **Rate Limiting**: Multi-layer DDoS protection with IP whitelisting
+- **Authentication**: JWT with secure algorithms and bcrypt password hashing
+- **Role-Based Access**: Separate admin/user systems with proper verification
+
+### 🛡️ Security Monitoring
+Monitor these metrics via admin dashboard:
+- Rate limit violations and banned IPs
+- Failed authentication attempts
+- Suspicious activity patterns
+- System health and performance metrics
+
+### 🔍 Security Testing
+```bash
+# Run security test suite
+pytest tests/test_security_fixes.py -v
+```
 
 ## 📝 License
 

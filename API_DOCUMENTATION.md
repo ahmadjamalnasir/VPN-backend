@@ -4,6 +4,150 @@
 
 The API is designed with clear separation between **Mobile App** and **Admin Backoffice** endpoints, each with appropriate role-based access control.
 
+## 🗄️ Database Structure & Relationships
+
+### Core Database Schema
+
+```sql
+-- USER MANAGEMENT (Separate Systems)
+users (
+    id UUID PRIMARY KEY,
+    user_id INTEGER UNIQUE,  -- Readable ID for API endpoints
+    email VARCHAR UNIQUE,
+    name VARCHAR,
+    phone VARCHAR,
+    country VARCHAR,
+    is_premium BOOLEAN DEFAULT false,
+    is_active BOOLEAN DEFAULT true,
+    is_email_verified BOOLEAN DEFAULT false,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+admin_users (
+    id UUID PRIMARY KEY,
+    username VARCHAR UNIQUE,
+    email VARCHAR UNIQUE,
+    password_hash VARCHAR,
+    full_name VARCHAR,
+    role VARCHAR CHECK (role IN ('super_admin', 'admin', 'moderator')),
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+-- SUBSCRIPTION SYSTEM (4-Table Structure)
+subscription_plans (
+    id UUID PRIMARY KEY,
+    plan_id INTEGER UNIQUE,  -- Readable ID for API endpoints
+    name VARCHAR,
+    description TEXT,
+    price_usd DECIMAL(10,2),
+    duration_days INTEGER,
+    features JSONB,  -- {"servers": "premium", "bandwidth": "unlimited", "devices": 5}
+    status VARCHAR CHECK (status IN ('active', 'inactive')),
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+user_subscriptions (
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES users(id),
+    plan_id UUID REFERENCES subscription_plans(id),
+    start_date TIMESTAMP,
+    end_date TIMESTAMP,
+    status VARCHAR CHECK (status IN ('active', 'expired', 'canceled')),
+    auto_renew BOOLEAN DEFAULT false,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+payments (
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES users(id),
+    subscription_id UUID REFERENCES user_subscriptions(id),
+    amount_usd DECIMAL(10,2),
+    payment_method VARCHAR CHECK (payment_method IN ('card', 'paypal', 'in_app_purchase', 'crypto')),
+    status VARCHAR CHECK (status IN ('pending', 'success', 'failed')),
+    transaction_ref VARCHAR,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+-- VPN INFRASTRUCTURE
+vpn_servers (
+    id UUID PRIMARY KEY,
+    hostname VARCHAR,
+    location VARCHAR,
+    endpoint VARCHAR,  -- IP:port (e.g., 203.0.113.1:51820)
+    public_key VARCHAR,  -- WireGuard public key
+    tunnel_ip VARCHAR,  -- Internal IP with CIDR (e.g., 10.221.12.11/32)
+    allowed_ips VARCHAR DEFAULT '0.0.0.0/0',
+    ip_address VARCHAR,  -- Extracted from tunnel_ip
+    is_premium BOOLEAN DEFAULT false,
+    status VARCHAR CHECK (status IN ('active', 'inactive', 'maintenance')),
+    current_load DECIMAL(3,2) DEFAULT 0.0,  -- 0.0-1.0
+    ping INTEGER DEFAULT 0,
+    max_connections INTEGER DEFAULT 100,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+connections (
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES users(id),
+    server_id UUID REFERENCES vpn_servers(id),
+    client_ip VARCHAR,
+    client_public_key VARCHAR,
+    status VARCHAR CHECK (status IN ('connected', 'disconnected', 'connecting')),
+    started_at TIMESTAMP,
+    ended_at TIMESTAMP,
+    duration_seconds INTEGER,
+    bytes_sent BIGINT DEFAULT 0,
+    bytes_received BIGINT DEFAULT 0,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+vpn_usage_logs (
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES users(id),
+    server_id UUID REFERENCES vpn_servers(id),
+    connected_at TIMESTAMP,
+    disconnected_at TIMESTAMP,
+    data_used_mb BIGINT DEFAULT 0
+);
+
+otp_verification (
+    id UUID PRIMARY KEY,
+    email VARCHAR,
+    otp_code VARCHAR,
+    purpose VARCHAR CHECK (purpose IN ('email_verification', 'password_reset')),
+    expires_at TIMESTAMP,
+    is_used BOOLEAN DEFAULT false,
+    created_at TIMESTAMP
+);
+```
+
+### Key Relationships & Foreign Keys
+
+```sql
+-- User-Subscription Relationships
+users.id (UUID) ← user_subscriptions.user_id (UUID)
+subscription_plans.id (UUID) ← user_subscriptions.plan_id (UUID)
+user_subscriptions.id (UUID) ← payments.subscription_id (UUID)
+
+-- VPN Connection Relationships
+users.id (UUID) ← connections.user_id (UUID)
+vpn_servers.id (UUID) ← connections.server_id (UUID)
+users.id (UUID) ← vpn_usage_logs.user_id (UUID)
+vpn_servers.id (UUID) ← vpn_usage_logs.server_id (UUID)
+
+-- API Endpoint ID Usage
+users.user_id (INTEGER) - Used in mobile/admin API endpoints
+subscription_plans.plan_id (INTEGER) - Used in admin API endpoints
+```
+
 ## 🔐 ADMIN AUTHENTICATION
 
 ### Admin Login (`/api/v1/admin-auth`) - No Token Required
@@ -45,6 +189,13 @@ GET  /api/v1/subscriptions/users/{user_id}           # Get user's active subscri
 POST /api/v1/subscriptions/users/{user_id}           # Assign subscription (self-purchase)
 PATCH /api/v1/subscriptions/users/{user_id}/cancel   # Cancel subscription auto-renew
 GET  /api/v1/subscriptions/users/{user_id}/history   # Get subscription history
+```
+
+### Payment Processing (`/api/v1/payments`) - JWT Required
+```http
+POST /api/v1/payments/initiate                       # Create payment request
+POST /api/v1/payments/callback                       # Payment provider webhook (No JWT)
+GET  /api/v1/payments/{payment_id}                   # Check payment status
 ```
 
 ### Real-time Updates (`/api/v1/websocket/connection`) - JWT Required
@@ -288,6 +439,20 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
 }
 ```
 
+### Payment Initiation Response
+```json
+{
+  "id": "uuid",
+  "user_id": "uuid",
+  "subscription_id": "uuid",
+  "amount_usd": 9.99,
+  "payment_method": "stripe",
+  "status": "pending",
+  "transaction_ref": "PAY_subscription_id",
+  "created_at": "2024-01-15T10:30:00Z"
+}
+```
+
 ### Admin Login Response
 ```json
 {
@@ -525,9 +690,9 @@ async def get_all_users(
     db: AsyncSession = Depends(get_db)
 ):
     # Verify admin access
-    admin_result = await db.execute(select(User).where(User.id == current_user_id))
+    admin_result = await db.execute(select(AdminUser).where(AdminUser.id == current_user_id))
     admin_user = admin_result.scalar_one_or_none()
-    if not admin_user or not admin_user.is_superuser:
+    if not admin_user:
         raise HTTPException(status_code=403, detail="Admin access required")
 ```
 
@@ -549,6 +714,11 @@ X-RateLimit-Reset: 1642248600
 // Authorization Error
 {
   "detail": "Admin access required"
+}
+
+// Premium Access Required
+{
+  "detail": "Upgrade to Premium required to access this server. Visit your account settings to upgrade."
 }
 
 // Rate Limited
@@ -575,6 +745,7 @@ X-RateLimit-Reset: 1642248600
 3. **VPN Connection**: Use `/vpn/connect`, `/vpn/disconnect`, and `/vpn/status` with real-time status via WebSocket
 4. **Server Selection**: All users see all servers, premium check happens at connection time
 5. **Error Handling**: Handle 403 "Upgrade to Premium required" errors with upgrade prompts
+6. **Payment Flow**: Use `/payments/initiate` → provider redirect → `/payments/callback` webhook → poll `/payments/{id}` for status
 
 ### Admin Panel Integration
 1. **Dashboard**: Use WebSocket `/websocket/admin-dashboard` for real-time updates
@@ -582,6 +753,7 @@ X-RateLimit-Reset: 1642248600
 3. **Analytics**: Display usage patterns and system performance metrics
 4. **Server Management**: Monitor server health and manage configurations
 5. **Role Verification**: Always verify admin status before showing admin features
+6. **Subscription Management**: Full CRUD operations on plans and user subscriptions
 
 ### Database Alignment
 - All APIs use proper foreign key relationships (UUIDs for internal, integers for external)
@@ -615,4 +787,22 @@ SubscriptionPlan.plan_id (int) - Used in admin API endpoints
 - WebSocket connections separated by role (mobile vs admin)
 - Database queries optimized with proper indexing on foreign keys
 
-The API is now fully aligned with database structure and ready for production mobile and admin integrations.
+## ⚠️ Production Integration Requirements
+
+### Payment Provider Integration
+- **Current Status**: Placeholder functions in `app/services/payment.py`
+- **Required**: Replace with real Stripe/PayPal/Razorpay SDK integration
+- **Webhook Configuration**: Set `https://yourdomain.com/api/v1/payments/callback` in provider dashboard
+- **Environment Variables**: Update with live API keys (not test keys)
+
+### Email Service Integration
+- **Current Status**: Mock implementation in `app/services/otp_service.py`
+- **Required**: Implement SMTP/SendGrid/AWS SES for OTP delivery
+- **Impact**: Email verification and password reset currently non-functional
+
+### WireGuard Key Generation
+- **Current Status**: Placeholder random hex in `app/services/wireguard_service.py`
+- **Required**: Use actual WireGuard key generation library
+- **Impact**: Generated keys are not valid WireGuard keys
+
+The API is fully functional for development and testing, with clear placeholders marked for production integration.
